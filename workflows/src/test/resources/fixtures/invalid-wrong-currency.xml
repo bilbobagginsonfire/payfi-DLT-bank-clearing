@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- INVALID: USD currency — should fail domestic validation (AM03) -->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+    <FIToFICstmrCdtTrf>
+        <GrpHdr>
+            <MsgId>MSG-TEST-INVALID-002</MsgId>
+            <CreDtTm>2026-03-22T10:20:00</CreDtTm>
+            <NbOfTxs>1</NbOfTxs>
+            <SttlmInf><SttlmMtd>CLRG</SttlmMtd></SttlmInf>
+        </GrpHdr>
+        <CdtTrfTxInf>
+            <PmtId>
+                <InstrId>INSTR-INVALID-002</InstrId>
+                <EndToEndId>E2E-INVALID-002</EndToEndId>
+                <TxId>TX-INVALID-002</TxId>
+            </PmtId>
+            <!-- USD instead of ZAR -->
+            <IntrBkSttlmAmt Ccy="USD">5000.00</IntrBkSttlmAmt>
+            <IntrBkSttlmDt>2026-03-22</IntrBkSttlmDt>
+            <Dbtr>
+                <Nm>Test User</Nm>
+                <Id><PrvtId><Othr><Id>7801015012082</Id><SchmeNm><Cd>NIDN</Cd></SchmeNm></Othr></PrvtId></Id>
+            </Dbtr>
+            <DbtrAcct><Id><Othr><Id>62000111222</Id></Othr></Id></DbtrAcct>
+            <DbtrAgt><FinInstnId><ClrSysMmbId><MmbId>100001</MmbId></ClrSysMmbId></FinInstnId></DbtrAgt>
+            <Cdtr><Nm>Shop XYZ</Nm></Cdtr>
+            <CdtrAcct><Id><Othr><Id>40333444555</Id></Othr></Id></CdtrAcct>
+            <CdtrAgt><FinInstnId><ClrSysMmbId><MmbId>200002</MmbId></ClrSysMmbId></FinInstnId></CdtrAgt>
+        </CdtTrfTxInf>
+    </FIToFICstmrCdtTrf>
+</Document>
