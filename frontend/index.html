@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PayFi — Interbank Clearing Platform</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0e17;--panel:#111827;--card:#1a2332;--border:#2a3a4a;--bactive:#3b82f6;--t1:#e2e8f0;--t2:#94a3b8;--t3:#64748b;--blue:#3b82f6;--green:#10b981;--amber:#f59e0b;--red:#ef4444;--cyan:#06b6d4;--purple:#8b5cf6;--mono:'JetBrains Mono',monospace;--sans:'DM Sans',sans-serif}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:var(--sans);background:var(--bg);color:var(--t1);height:100vh;overflow:hidden}
+
+.topbar{height:44px;background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 16px}
+.topbar-left{display:flex;align-items:center;gap:10px}
+.logo{width:26px;height:26px;background:linear-gradient(135deg,var(--blue),var(--cyan));border-radius:5px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#fff}
+.topbar h1{font-size:15px;font-weight:600}
+.topbar .tag{font-size:10px;color:var(--t3);background:var(--card);padding:2px 7px;border-radius:3px;font-family:var(--mono)}
+.topbar-right{display:flex;align-items:center;gap:14px;font-size:11px;color:var(--t2)}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:3px;animation:pulse 2s infinite}
+.dot.on{background:var(--green)}.dot.off{background:var(--red);animation:none}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.btn{font-family:var(--sans);font-size:11px;font-weight:600;padding:6px 12px;border:1px solid var(--border);border-radius:5px;background:var(--panel);color:var(--t1);cursor:pointer;transition:.15s}
+.btn:hover{border-color:var(--bactive);background:var(--card)}
+.btn.p{background:linear-gradient(135deg,var(--blue),var(--cyan));border-color:transparent;color:#fff}
+.btn.demo{background:linear-gradient(135deg,var(--amber),#e67e22);border-color:transparent;color:#fff}
+.btn.clear{border-color:var(--red);color:var(--red)}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+
+.grid{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;height:calc(100vh - 44px);gap:1px;background:var(--border)}
+.panel{background:var(--bg);display:flex;flex-direction:column;overflow:hidden}
+.ph{height:32px;display:flex;align-items:center;padding:0 12px;gap:7px;border-bottom:1px solid var(--border);flex-shrink:0}
+.ph .ind{width:9px;height:9px;border-radius:2px;flex-shrink:0}
+.ph h2{font-size:11px;font-weight:600}
+.ph .badge{font-family:var(--mono);font-size:9px;padding:1px 5px;border-radius:3px;background:var(--card);color:var(--t3)}
+.ph .right{margin-left:auto;font-size:9px;color:var(--t3);font-family:var(--mono)}
+.pb{flex:1;overflow-y:auto;padding:8px 12px}
+.pb::-webkit-scrollbar{width:3px}.pb::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+.tc{background:var(--card);border:1px solid var(--border);border-radius:5px;padding:8px 10px;margin-bottom:6px;font-size:11px}
+.tc.fresh{animation:appear .3s ease}
+@keyframes appear{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+.r{display:flex;justify-content:space-between;margin-bottom:2px}
+.l{color:var(--t3);font-size:9px;text-transform:uppercase;letter-spacing:.04em;font-weight:500}
+.v{font-family:var(--mono);font-size:10px;color:var(--t1);text-align:right;max-width:65%;word-break:break-all}
+.v.amt{font-size:13px;font-weight:600;color:var(--green)}
+.st{display:inline-block;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:600;font-family:var(--mono)}
+.st.SUBMITTING{background:#1e2a3a;color:var(--t3)}.st.SUBMITTED{background:#1e3a5f;color:var(--blue)}.st.VALIDATED{background:#1a3340;color:var(--cyan)}.st.CLEARED{background:#1a3329;color:var(--green)}.st.REJECTED{background:#3b1a1a;color:var(--red)}
+.xt{font-size:9px;color:var(--blue);cursor:pointer;margin-top:3px;display:inline-block}.xt:hover{text-decoration:underline}
+.xb{background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:6px;margin-top:4px;font-family:var(--mono);font-size:9px;color:var(--t2);white-space:pre-wrap;word-break:break-all;max-height:160px;overflow-y:auto;display:none}.xb.open{display:block}
+.fr{display:flex;justify-content:space-between;padding:2px 0;font-size:10px;border-top:1px solid var(--border);margin-top:4px;padding-top:4px}
+.fr .fl{color:var(--amber);font-weight:500}
+.tl{margin-top:4px;padding-left:10px;border-left:2px solid var(--border)}
+.ti{position:relative;padding:1px 0 4px 10px;font-size:9px}
+.ti::before{content:'';position:absolute;left:-6px;top:4px;width:6px;height:6px;border-radius:50%;border:2px solid var(--blue);background:var(--bg)}
+.ti.d::before{background:var(--green);border-color:var(--green)}
+.ti .tm{color:var(--t3);font-family:var(--mono);font-size:8px}
+.empty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--t3);font-size:11px;font-style:italic}
+.redact{color:var(--t3);font-style:italic;font-size:9px}
+.form-s{margin-bottom:5px}.form-s label{display:block;font-size:9px;color:var(--t3);margin-bottom:1px;text-transform:uppercase;letter-spacing:.04em}
+.form-s input{width:100%;background:var(--card);border:1px solid var(--border);border-radius:3px;padding:5px 7px;color:var(--t1);font-family:var(--mono);font-size:10px}.form-s input:focus{outline:none;border-color:var(--blue)}
+.form-r{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.form-a{display:flex;gap:6px;margin-top:6px;margin-bottom:10px}
+
+/* SO summary strip */
+.so-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:8px}
+.so-kpi{background:var(--card);border:1px solid var(--border);border-radius:4px;padding:6px 8px;text-align:center}
+.so-kpi .kv{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--green)}
+.so-kpi .kl{font-size:8px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-top:2px}
+.so-kpi .kv.warn{color:var(--amber)}.so-kpi .kv.err{color:var(--red)}
+
+/* Operational flags */
+.flag{display:inline-block;padding:1px 4px;border-radius:2px;font-size:8px;font-family:var(--mono);font-weight:600;margin-left:3px}
+.flag.yes{background:#1a3329;color:var(--green)}.flag.no{background:#3b1a1a;color:var(--red)}.flag.na{background:var(--card);color:var(--t3)}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="logo">P</div>
+    <h1>PayFi</h1>
+    <span class="tag">Corda 5 · ISO 20022 · ZAR</span>
+  </div>
+  <div class="topbar-right">
+    <button class="btn clear" onclick="clearAll()">✕ Clear All</button>
+    <span><span class="dot on" id="sDot"></span><span id="sTxt">Connecting...</span></span>
+    <span id="txC" style="font-family:var(--mono);font-size:10px">0 tx</span>
+    <span id="lastT" style="font-family:var(--mono);font-size:10px;color:var(--green)"></span>
+  </div>
+</div>
+
+<div class="grid">
+  <!-- BANK ALPHA -->
+  <div class="panel">
+    <div class="ph"><div class="ind" style="background:var(--blue)"></div><h2>Bank Alpha — Sending Bank</h2><span class="badge" id="hA">—</span></div>
+    <div class="pb" id="pA">
+      <div id="payForm">
+        <div class="form-r"><div class="form-s"><label>Debtor Name</label><input id="fDN" placeholder="e.g. Sipho Nkosi"/></div><div class="form-s"><label>SA ID (NIDN)</label><input id="fDI" placeholder="e.g. 7801015012082"/></div></div>
+        <div class="form-r"><div class="form-s"><label>Debtor Account</label><input id="fDA" placeholder="e.g. 62012345678"/></div><div class="form-s"><label>Amount (ZAR)</label><input id="fAm" type="number" placeholder="e.g. 15000"/></div></div>
+        <div class="form-r"><div class="form-s"><label>Creditor Name</label><input id="fCN" placeholder="e.g. ABC Trading"/></div><div class="form-s"><label>Creditor Account</label><input id="fCA" placeholder="e.g. 40567890123"/></div></div>
+        <div class="form-s"><label>Remittance</label><input id="fRm" placeholder="e.g. Invoice INV-2026-0342"/></div>
+        <div class="form-a">
+          <button class="btn p" id="btnPay" onclick="makePayment()" disabled>Make Payment</button>
+          <button class="btn demo" onclick="fillDemo()">Fill Demo (R15,000)</button>
+          <button class="btn" onclick="clearForm()" style="font-size:10px">Clear</button>
+        </div>
+      </div>
+      <div id="aList"></div>
+    </div>
+  </div>
+
+  <!-- BANK BETA -->
+  <div class="panel">
+    <div class="ph"><div class="ind" style="background:var(--green)"></div><h2>Bank Beta — Receiving Bank</h2><span class="badge" id="hB">—</span></div>
+    <div class="pb" id="pB"><div id="bList"></div><div class="empty" id="eB">Waiting for incoming payments...</div></div>
+  </div>
+
+  <!-- PAYFI CONTROL TOWER -->
+  <div class="panel">
+    <div class="ph"><div class="ind" style="background:var(--amber)"></div><h2>PayFi — System Operator Control Tower</h2><span class="badge">No funds held · No settlement performed</span><span class="right">Settlement via SAMOS (off-ledger)</span></div>
+    <div class="pb" id="pPF"><div id="pfStrip"></div><div id="pfList"></div><div class="empty" id="ePF">No clearing activity</div></div>
+  </div>
+
+  <!-- SARB OBSERVER -->
+  <div class="panel">
+    <div class="ph"><div class="ind" style="background:var(--red)"></div><h2>SARB — Regulatory Observer</h2><span class="badge" id="hS">—</span><span class="right">Full FICA · All XML · All Fees</span></div>
+    <div class="pb" id="pS"><div id="sList"></div><div class="empty" id="eS">No regulatory data</div></div>
+  </div>
+</div>
+
+<script>
+let C={bankAlpha:{hash:''},bankBeta:{hash:''},sarbObserver:{hash:''},apiBase:'/api/v5_2'};
+let txs=[],txN=0;
+
+async function loadConfig(){try{const r=await fetch('/config.json');if(r.ok){Object.assign(C,await r.json());$('hA').textContent=C.bankAlpha.hash||'—';$('hB').textContent=C.bankBeta.hash||'—';$('hS').textContent=C.sarbObserver.hash||'—';$('sDot').className='dot on';$('sTxt').textContent='Corda Connected';}}catch(e){$('sDot').className='dot off';$('sTxt').textContent='Demo Mode';}}
+function $(id){return document.getElementById(id)}
+
+document.addEventListener('input',()=>{const f=['fDN','fDI','fDA','fAm','fCN','fCA'];$('btnPay').disabled=!f.every(id=>$(id).value.trim());});
+
+function fillDemo(){$('fDN').value='Sipho Nkosi';$('fDI').value='7801015012082';$('fDA').value='62012345678';$('fAm').value='15000';$('fCN').value='ABC Trading (Pty) Ltd';$('fCA').value='40567890123';$('fRm').value='Invoice INV-2026-0342 payment';$('btnPay').disabled=false;}
+function clearForm(){['fDN','fDI','fDA','fAm','fCN','fCA','fRm'].forEach(id=>$(id).value='');$('btnPay').disabled=true;}
+function clearAll(){txs=[];txN=0;renderAll();$('txC').textContent='0 tx';$('lastT').textContent='';}
+
+async function startFlow(h,fc,b,rid){try{const r=await fetch(`${C.apiBase}/flow/${h}`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Basic '+btoa('admin:admin')},body:JSON.stringify({clientRequestId:rid,flowClassName:fc,requestBody:b})});return await r.json();}catch(e){return{error:e.message};}}
+async function pollResult(h,rid,mx=24){for(let i=0;i<mx;i++){await dly(2500);try{const r=await fetch(`${C.apiBase}/flow/${h}/${rid}`,{headers:{'Authorization':'Basic '+btoa('admin:admin')}});const d=await r.json();if(d.flowStatus==='COMPLETED'||d.flowStatus==='FAILED')return d;}catch(e){}}return{flowStatus:'TIMEOUT'};}
+function dly(ms){return new Promise(r=>setTimeout(r,ms));}
+
+function genPacs(p){
+  const now=new Date().toISOString().slice(0,19),today=new Date().toISOString().slice(0,10);
+  const mid=`MSG-${Date.now()}`,iid=`INSTR-${++txN}`,eid=`E2E-${txN}`,tid=`TX-${txN}`;
+  return{msgId:mid,instrId:iid,e2eId:eid,txId:tid,xml:`<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+  <FIToFICstmrCdtTrf>
+    <GrpHdr><MsgId>${mid}</MsgId><CreDtTm>${now}</CreDtTm><NbOfTxs>1</NbOfTxs><SttlmInf><SttlmMtd>CLRG</SttlmMtd></SttlmInf></GrpHdr>
+    <CdtTrfTxInf>
+      <PmtId><InstrId>${iid}</InstrId><EndToEndId>${eid}</EndToEndId><TxId>${tid}</TxId></PmtId>
+      <IntrBkSttlmAmt Ccy="ZAR">${p.amount}.00</IntrBkSttlmAmt><IntrBkSttlmDt>${today}</IntrBkSttlmDt>
+      <Dbtr><Nm>${p.dn}</Nm><Id><PrvtId><Othr><Id>${p.di}</Id><SchmeNm><Cd>NIDN</Cd></SchmeNm></Othr></PrvtId></Id></Dbtr>
+      <DbtrAcct><Id><Othr><Id>${p.da}</Id></Othr></Id></DbtrAcct>
+      <DbtrAgt><FinInstnId><ClrSysMmbId><MmbId>100001</MmbId></ClrSysMmbId></FinInstnId></DbtrAgt>
+      <Cdtr><Nm>${p.cn}</Nm></Cdtr>
+      <CdtrAcct><Id><Othr><Id>${p.ca}</Id></Othr></Id></CdtrAcct>
+      <CdtrAgt><FinInstnId><ClrSysMmbId><MmbId>200002</MmbId></ClrSysMmbId></FinInstnId></CdtrAgt>
+      <RmtInf><Ustrd>${p.rm||''}</Ustrd></RmtInf>
+    </CdtTrfTxInf>
+  </FIToFICstmrCdtTrf>
+</Document>`};}
+
+function demoPacs002(p,st){return`<?xml version="1.0"?>\n<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.002.001.10"><FIToFIPmtStsRpt><GrpHdr><MsgId>PSR-${Date.now()}</MsgId></GrpHdr><OrgnlGrpInfAndSts><OrgnlMsgId>${p.msgId}</OrgnlMsgId><OrgnlMsgNmId>pacs.008.001.08</OrgnlMsgNmId></OrgnlGrpInfAndSts><TxInfAndSts><OrgnlInstrId>${p.instrId}</OrgnlInstrId><OrgnlEndToEndId>${p.e2eId}</OrgnlEndToEndId><TxSts>${st}</TxSts></TxInfAndSts></FIToFIPmtStsRpt></Document>`;}
+
+async function makePayment(){
+  const p={amount:$('fAm').value,dn:$('fDN').value,di:$('fDI').value,da:$('fDA').value,cn:$('fCN').value,ca:$('fCA').value,rm:$('fRm').value};
+  $('btnPay').disabled=true;$('btnPay').textContent='Processing...';
+  const t0=performance.now(),pacs=genPacs(p);
+  const stateId=`ST-${Date.now().toString(36).toUpperCase()}`;
+  const cordaTxId=`CTX-${Date.now().toString(36).toUpperCase()}`;
+  const isSameBank=false; // BankAlpha→BankBeta is different
+
+  const tx={
+    id:pacs.instrId,msgId:pacs.msgId,instrId:pacs.instrId,e2eId:pacs.e2eId,txId:pacs.txId,
+    stateId:stateId,cordaTxId:cordaTxId,
+    amount:p.amount,dn:p.dn,di:p.di,da:p.da,cn:p.cn,ca:p.ca,rm:p.rm,
+    db:'100001',cb:'200002',dbName:'BankAlpha',cbName:'BankBeta',
+    status:'SUBMITTING',pacs008:pacs.xml,pacs002:null,pacs002Code:null,
+    feeApplicable:parseFloat(p.amount)>3000,
+    feeAmt:parseFloat(p.amount)>3000?'0.20':'0.00',
+    feeTax:parseFloat(p.amount)>3000?'0.03':'0.00',
+    feeAccrued:false,feeInvoiced:false,
+    isSameBank:isSameBank,idempotencyHit:false,
+    dbStatus:'ACTIVE',cbStatus:'ACTIVE',
+    sarbCopied:false,settlementIncluded:false,settlementRef:null,
+    validationFailed:false,rejectionCode:null,
+    tSubmit:null,tValidate:null,tClear:null,
+    tl:[{time:new Date().toISOString(),event:'pacs.008 created by Bank Alpha',done:false}],
+    timing:null
+  };
+  txs.unshift(tx);renderAll();
+
+  if(C.bankAlpha.hash){
+    const rid=`payfi-${Date.now()}`;
+    await startFlow(C.bankAlpha.hash,'za.co.payfi.clearing.flows.SubmitPaymentInstructionFlow',{pacs008Xml:pacs.xml},rid);
+    tx.tSubmit=new Date().toISOString();tx.status='SUBMITTED';
+    tx.tl.push({time:tx.tSubmit,event:'Flow started on Corda',done:true});renderAll();
+    const res=await pollResult(C.bankAlpha.hash,rid);
+    if(res.flowStatus==='COMPLETED'){
+      tx.tClear=new Date().toISOString();tx.status='CLEARED';tx.pacs002=res.flowResult||JSON.stringify(res);tx.pacs002Code='ACCP';
+      tx.feeAccrued=tx.feeApplicable;tx.sarbCopied=true;
+      tx.tl.push({time:tx.tClear,event:'Notarised · pacs.002 ACCP',done:true});
+      tx.tl.push({time:tx.tClear,event:'Distributed to BankBeta + SARB',done:true});
+    }else{
+      tx.status='REJECTED';tx.pacs002=JSON.stringify(res);tx.pacs002Code='RJCT';tx.validationFailed=true;tx.rejectionCode=res.flowError||'UNKNOWN';
+      tx.tl.push({time:new Date().toISOString(),event:`FAILED: ${res.flowError||'unknown'}`,done:true});
+    }
+  }else{
+    // DEMO MODE
+    await dly(300);tx.tSubmit=new Date().toISOString();tx.status='SUBMITTED';
+    tx.tl.push({time:tx.tSubmit,event:'Received by PayFi platform',done:true});renderAll();
+    await dly(250);tx.tValidate=new Date().toISOString();tx.status='VALIDATED';
+    tx.tl.push({time:tx.tValidate,event:'FICA: SA ID Luhn ✓ · Branch codes resolved',done:true});renderAll();
+    await dly(200);tx.tl.push({time:new Date().toISOString(),event:'Fee: R'+(tx.feeApplicable?'0.23 (incl VAT)':'0.00')+' calculated',done:true});renderAll();
+    await dly(350);tx.tClear=new Date().toISOString();tx.status='CLEARED';tx.pacs002=demoPacs002(pacs,'ACCP');tx.pacs002Code='ACCP';
+    tx.feeAccrued=tx.feeApplicable;tx.sarbCopied=true;
+    tx.tl.push({time:tx.tClear,event:'Notarised on Corda 5 · Finality confirmed',done:true});
+    tx.tl.push({time:tx.tClear,event:'pacs.002 ACCP → Bank Alpha',done:true});
+    tx.tl.push({time:tx.tClear,event:'State → Bank Beta (creditor)',done:true});
+    tx.tl.push({time:tx.tClear,event:'State → SARB Observer',done:true});
+  }
+
+  tx.timing=Math.round(performance.now()-t0);
+  $('lastT').textContent=`${tx.timing}ms`;
+  $('txC').textContent=`${txs.length} tx`;
+  $('btnPay').disabled=false;$('btnPay').textContent='Make Payment';
+  renderAll();
+}
+
+// ============================================================================
+// RENDERING
+// ============================================================================
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function togXml(id){$(id).classList.toggle('open');}
+function renderAll(){renderA();renderB();renderPF();renderS();}
+
+function tlHtml(tl){return tl.map(t=>`<div class="ti ${t.done?'d':''}"><span class="tm">${new Date(t.time).toLocaleTimeString()}</span> — ${t.event}</div>`).join('');}
+function flag(v,label){return v===true?`<span class="flag yes">YES</span>`:v===false?`<span class="flag no">NO</span>`:`<span class="flag na">${label||'N/A'}</span>`;}
+
+// --- BANK ALPHA: full view + fee note ---
+function renderA(){
+  const el=$('aList');if(!txs.length){el.innerHTML='';return;}
+  el.innerHTML=txs.map(tx=>{
+    const x1='xa8'+tx.id,x2='xa2'+tx.id;
+    return`<div class="tc fresh">
+      <div class="r"><span class="l">Amount</span><span class="v amt">ZAR ${fmtAmt(tx.amount)}</span></div>
+      <div class="r"><span class="l">Status</span><span class="st ${tx.status}">${tx.status}</span>${tx.timing?` <span style="font-size:9px;color:var(--cyan);font-family:var(--mono)">${tx.timing}ms</span>`:''}</div>
+      <div class="r"><span class="l">InstrId</span><span class="v">${tx.instrId}</span></div>
+      <div class="r"><span class="l">EndToEndId</span><span class="v">${tx.e2eId}</span></div>
+      <div class="r"><span class="l">Debtor</span><span class="v">${tx.dn}</span></div>
+      <div class="r"><span class="l">SA ID (NIDN)</span><span class="v">${tx.di}</span></div>
+      <div class="r"><span class="l">Debtor Account</span><span class="v">${tx.da}</span></div>
+      <div class="r"><span class="l">Creditor</span><span class="v">${tx.cn}</span></div>
+      <div class="r"><span class="l">Creditor Account</span><span class="v">${tx.ca}</span></div>
+      <div class="r"><span class="l">Remittance</span><span class="v">${tx.rm||'—'}</span></div>
+      ${tx.feeApplicable?`<div class="fr"><span class="fl">Network fee (charged to creditor bank)</span><span class="v">ZAR ${tx.feeAmt} + R${tx.feeTax} VAT</span></div>`:''}
+      <span class="xt" onclick="togXml('${x1}')">▸ pacs.008</span><div class="xb" id="${x1}">${esc(tx.pacs008)}</div>
+      ${tx.pacs002?`<span class="xt" onclick="togXml('${x2}')">▸ pacs.002</span><div class="xb" id="${x2}">${esc(tx.pacs002)}</div>`:''}
+      <div class="tl">${tlHtml(tx.tl)}</div>
+    </div>`;
+  }).join('');
+}
+
+// --- BANK BETA: full view ---
+function renderB(){
+  const el=$('bList'),emp=$('eB');
+  const vis=txs.filter(t=>['CLEARED','VALIDATED','SUBMITTED'].includes(t.status));
+  if(!vis.length){el.innerHTML='';emp.style.display='flex';return;}
+  emp.style.display='none';
+  el.innerHTML=vis.map(tx=>{
+    const x1='xb8'+tx.id,x2='xb2'+tx.id;
+    return`<div class="tc fresh">
+      <div class="r"><span class="l">Amount</span><span class="v amt">ZAR ${fmtAmt(tx.amount)}</span></div>
+      <div class="r"><span class="l">Status</span><span class="st ${tx.status}">${tx.status}</span></div>
+      <div class="r"><span class="l">From</span><span class="v">${tx.dn} (${tx.dbName})</span></div>
+      <div class="r"><span class="l">To Account</span><span class="v">${tx.ca}</span></div>
+      <div class="r"><span class="l">Remittance</span><span class="v">${tx.rm||'—'}</span></div>
+      ${tx.feeApplicable?`<div class="fr"><span class="fl">Fee payable by this bank</span><span class="v">ZAR ${(parseFloat(tx.feeAmt)+parseFloat(tx.feeTax)).toFixed(2)}</span></div>`:''}
+      <span class="xt" onclick="togXml('${x1}')">▸ pacs.008</span><div class="xb" id="${x1}">${esc(tx.pacs008)}</div>
+      ${tx.pacs002?`<span class="xt" onclick="togXml('${x2}')">▸ pacs.002</span><div class="xb" id="${x2}">${esc(tx.pacs002)}</div>`:''}
+      <div class="tl">${tlHtml(tx.tl)}</div>
+    </div>`;
+  }).join('');
+}
+
+// --- PAYFI CONTROL TOWER: operational SO view, no PII ---
+function renderPF(){
+  const el=$('pfList'),strip=$('pfStrip'),emp=$('ePF');
+  if(!txs.length){el.innerHTML='';strip.innerHTML='';emp.style.display='flex';return;}
+  emp.style.display='none';
+
+  let cleared=0,rejected=0,vol=0,fees=0,tax=0,latSum=0,latN=0;
+  txs.forEach(tx=>{
+    if(tx.status==='CLEARED'){cleared++;vol+=parseFloat(tx.amount);if(tx.feeApplicable){fees+=parseFloat(tx.feeAmt);tax+=parseFloat(tx.feeTax);}if(tx.timing){latSum+=tx.timing;latN++;}}
+    if(tx.status==='REJECTED')rejected++;
+  });
+  const avgLat=latN?Math.round(latSum/latN):0;
+
+  strip.innerHTML=`<div class="so-strip">
+    <div class="so-kpi"><div class="kv">${cleared}</div><div class="kl">Cleared</div></div>
+    <div class="so-kpi"><div class="kv ${rejected>0?'err':''}">${rejected}</div><div class="kl">Rejected</div></div>
+    <div class="so-kpi"><div class="kv">${avgLat}ms</div><div class="kl">Avg Latency</div></div>
+    <div class="so-kpi"><div class="kv warn">R${(fees+tax).toFixed(2)}</div><div class="kl">Revenue</div></div>
+  </div>
+  <div class="so-strip">
+    <div class="so-kpi"><div class="kv">R${fmtAmt(vol)}</div><div class="kl">Gross Volume</div></div>
+    <div class="so-kpi"><div class="kv">R${fees.toFixed(2)}</div><div class="kl">Fees (ex VAT)</div></div>
+    <div class="so-kpi"><div class="kv">R${tax.toFixed(2)}</div><div class="kl">VAT</div></div>
+    <div class="so-kpi"><div class="kv">${txs.length}</div><div class="kl">Total Msgs</div></div>
+  </div>`;
+
+  el.innerHTML=txs.map(tx=>`<div class="tc">
+    <div class="r"><span class="l">Amount</span><span class="v amt">ZAR ${fmtAmt(tx.amount)}</span></div>
+    <div class="r"><span class="l">Status</span><span class="st ${tx.status}">${tx.status}</span>${tx.pacs002Code?` <span class="st ${tx.pacs002Code}">${tx.pacs002Code}</span>`:''}</div>
+    <div class="r"><span class="l">MsgId</span><span class="v">${tx.msgId}</span></div>
+    <div class="r"><span class="l">InstrId</span><span class="v">${tx.instrId}</span></div>
+    <div class="r"><span class="l">EndToEndId</span><span class="v">${tx.e2eId}</span></div>
+    <div class="r"><span class="l">TxId</span><span class="v">${tx.txId}</span></div>
+    <div class="r"><span class="l">Corda StateId</span><span class="v">${tx.stateId}</span></div>
+    <div class="r"><span class="l">Corda TxId</span><span class="v">${tx.cordaTxId}</span></div>
+    <div class="r"><span class="l">Route</span><span class="v">${tx.dbName} (${tx.db}) → ${tx.cbName} (${tx.cb})</span></div>
+    <div class="r"><span class="l">Debtor Bank Status</span><span class="v">${tx.dbStatus} ${flag(tx.dbStatus==='ACTIVE')}</span></div>
+    <div class="r"><span class="l">Creditor Bank Status</span><span class="v">${tx.cbStatus} ${flag(tx.cbStatus==='ACTIVE')}</span></div>
+    <div class="r"><span class="l">Debtor/Creditor PII</span><span class="redact">Not visible to System Operator</span></div>
+    <div class="r"><span class="l">Same-bank (on-us)</span><span class="v">${flag(tx.isSameBank)}</span></div>
+    <div class="r"><span class="l">Idempotency Hit</span><span class="v">${flag(tx.idempotencyHit)}</span></div>
+    <div class="r"><span class="l">Validation Failed</span><span class="v">${flag(tx.validationFailed)}</span></div>
+    ${tx.rejectionCode?`<div class="r"><span class="l">Rejection Code</span><span class="v" style="color:var(--red)">${tx.rejectionCode}</span></div>`:''}
+    <div class="r"><span class="l">Clearing Latency</span><span class="v">${tx.timing?tx.timing+'ms':'—'}</span></div>
+    <div class="r"><span class="l">SARB Copy</span><span class="v">${flag(tx.sarbCopied)}</span></div>
+    <div class="fr"><span class="fl">Fee Applicable</span><span class="v">${flag(tx.feeApplicable)}</span></div>
+    ${tx.feeApplicable?`
+    <div class="fr"><span class="fl">Fee Amount</span><span class="v">R${tx.feeAmt}</span></div>
+    <div class="fr"><span class="fl">VAT</span><span class="v">R${tx.feeTax}</span></div>
+    <div class="fr"><span class="fl">Fee Payer</span><span class="v">${tx.cbName} (${tx.cb})</span></div>
+    <div class="fr"><span class="fl">Accrued</span><span class="v">${flag(tx.feeAccrued)}</span></div>
+    <div class="fr"><span class="fl">Invoiced</span><span class="v">${flag(tx.feeInvoiced)}</span></div>`:''}
+    <div class="fr"><span class="fl">Settlement Included</span><span class="v">${flag(tx.settlementIncluded)}</span></div>
+    ${tx.settlementRef?`<div class="fr"><span class="fl">Settlement Ref</span><span class="v">${tx.settlementRef}</span></div>`:''}
+    <div class="tl">${tlHtml(tx.tl)}</div>
+  </div>`).join('');
+}
+
+// --- SARB: sees EVERYTHING ---
+function renderS(){
+  const el=$('sList'),emp=$('eS');
+  if(!txs.length){el.innerHTML='';emp.style.display='flex';return;}
+  emp.style.display='none';
+
+  const hdr=`<div class="tc" style="border-left:3px solid var(--red)">
+    <div class="r"><span class="l">Regulatory Access Level</span><span class="v" style="color:var(--green)">FULL — FICA + Fees + XML</span></div>
+    <div class="r"><span class="l">Transactions Observed</span><span class="v">${txs.length}</span></div>
+  </div>`;
+
+  el.innerHTML=hdr+txs.map(tx=>{
+    const x1='xs8'+tx.id,x2='xs2'+tx.id;
+    return`<div class="tc">
+      <div class="r"><span class="l">Amount</span><span class="v amt">ZAR ${fmtAmt(tx.amount)}</span></div>
+      <div class="r"><span class="l">Status</span><span class="st ${tx.status}">${tx.status}</span>${tx.pacs002Code?` <span class="st ${tx.pacs002Code}">${tx.pacs002Code}</span>`:''}</div>
+      <div class="r"><span class="l">MsgId</span><span class="v">${tx.msgId}</span></div>
+      <div class="r"><span class="l">InstrId / E2E / TxId</span><span class="v">${tx.instrId} · ${tx.e2eId} · ${tx.txId}</span></div>
+      <div class="r"><span class="l">Corda State</span><span class="v">${tx.stateId}</span></div>
+      <div class="r"><span class="l">Debtor</span><span class="v">${tx.dn}</span></div>
+      <div class="r"><span class="l">Debtor SA ID</span><span class="v">${tx.di}</span></div>
+      <div class="r"><span class="l">Debtor Account</span><span class="v">${tx.da}</span></div>
+      <div class="r"><span class="l">Debtor Bank</span><span class="v">${tx.dbName} (${tx.db})</span></div>
+      <div class="r"><span class="l">Creditor</span><span class="v">${tx.cn}</span></div>
+      <div class="r"><span class="l">Creditor Account</span><span class="v">${tx.ca}</span></div>
+      <div class="r"><span class="l">Creditor Bank</span><span class="v">${tx.cbName} (${tx.cb})</span></div>
+      <div class="r"><span class="l">Remittance</span><span class="v">${tx.rm||'—'}</span></div>
+      ${tx.feeApplicable?`
+      <div class="fr"><span class="fl">Fee</span><span class="v">R${tx.feeAmt} + R${tx.feeTax} VAT = R${(parseFloat(tx.feeAmt)+parseFloat(tx.feeTax)).toFixed(2)}</span></div>
+      <div class="fr"><span class="fl">Payer</span><span class="v">${tx.cbName}</span></div>`:`
+      <div class="fr"><span class="fl">Fee</span><span class="v" style="color:var(--t3)">N/A (≤R3,000)</span></div>`}
+      <span class="xt" onclick="togXml('${x1}')">▸ pacs.008 XML</span><div class="xb" id="${x1}">${esc(tx.pacs008)}</div>
+      ${tx.pacs002?`<span class="xt" onclick="togXml('${x2}')">▸ pacs.002 XML</span><div class="xb" id="${x2}">${esc(tx.pacs002)}</div>`:''}
+      <div class="tl">${tlHtml(tx.tl)}</div>
+    </div>`;
+  }).join('');
+}
+
+function fmtAmt(v){return parseFloat(v).toLocaleString('en-ZA',{minimumFractionDigits:2});}
+loadConfig();
+</script>
+</body>
+</html>
