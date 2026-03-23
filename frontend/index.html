@@ -77,8 +77,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--t1);height:100vh;o
 
 <div class="topbar">
   <div class="topbar-left">
-    <div class="logo">P</div>
-    <h1>PayFi</h1>
+    <img src="payfi-white-transparent.png" alt="PayFi" style="height:28px" />
     <span class="tag">Corda 5 · ISO 20022 · ZAR</span>
   </div>
   <div class="topbar-right">
@@ -296,11 +295,25 @@ function renderPF(){
   emp.style.display='none';
 
   let cleared=0,rejected=0,vol=0,fees=0,tax=0,latSum=0,latN=0;
+  // Net bilateral clearing: track what each bank owes the other
+  let alphaPaysBeta=0, betaPaysAlpha=0;
   txs.forEach(tx=>{
-    if(tx.status==='CLEARED'){cleared++;vol+=parseFloat(tx.amount);if(tx.feeApplicable){fees+=parseFloat(tx.feeAmt);tax+=parseFloat(tx.feeTax);}if(tx.timing){latSum+=tx.timing;latN++;}}
+    if(tx.status==='CLEARED'){
+      cleared++;
+      const amt=parseFloat(tx.amount);
+      vol+=amt;
+      if(tx.feeApplicable){fees+=parseFloat(tx.feeAmt);tax+=parseFloat(tx.feeTax);}
+      if(tx.timing){latSum+=tx.timing;latN++;}
+      // Net position: which direction did the money flow?
+      if(tx.db==='100001'&&tx.cb==='200002') alphaPaysBeta+=amt;
+      else if(tx.db==='200002'&&tx.cb==='100001') betaPaysAlpha+=amt;
+    }
     if(tx.status==='REJECTED')rejected++;
   });
   const avgLat=latN?Math.round(latSum/latN):0;
+  const netAmount=alphaPaysBeta-betaPaysAlpha;
+  const netDirection=netAmount>0?'BankAlpha owes BankBeta':netAmount<0?'BankBeta owes BankAlpha':'Balanced';
+  const netColor=netAmount===0?'var(--green)':'var(--cyan)';
 
   strip.innerHTML=`<div class="so-strip">
     <div class="so-kpi"><div class="kv">${cleared}</div><div class="kl">Cleared</div></div>
@@ -313,6 +326,14 @@ function renderPF(){
     <div class="so-kpi"><div class="kv">R${fees.toFixed(2)}</div><div class="kl">Fees (ex VAT)</div></div>
     <div class="so-kpi"><div class="kv">R${tax.toFixed(2)}</div><div class="kl">VAT</div></div>
     <div class="so-kpi"><div class="kv">${txs.length}</div><div class="kl">Total Msgs</div></div>
+  </div>
+  <div class="tc" style="border-left:3px solid var(--cyan);margin-bottom:8px">
+    <div class="r"><span class="l" style="font-size:10px;color:var(--cyan)">Bilateral Net Clearing Position</span><span class="v"></span></div>
+    <div class="r"><span class="l">BankAlpha (100001) → BankBeta (200002)</span><span class="v">R${fmtAmt(alphaPaysBeta)}</span></div>
+    <div class="r"><span class="l">BankBeta (200002) → BankAlpha (100001)</span><span class="v">R${fmtAmt(betaPaysAlpha)}</span></div>
+    <div class="r" style="border-top:1px solid var(--border);padding-top:4px;margin-top:4px"><span class="l" style="font-weight:600">Net Settlement Amount</span><span class="v" style="font-size:13px;font-weight:700;color:${netColor}">R${fmtAmt(Math.abs(netAmount))}</span></div>
+    <div class="r"><span class="l">Direction</span><span class="v" style="color:${netColor}">${netDirection}</span></div>
+    <div class="r"><span class="l">Settlement Method</span><span class="v" style="color:var(--t3)">SAMOS (off-ledger) · Banks submit own pacs.009</span></div>
   </div>`;
 
   el.innerHTML=txs.map(tx=>`<div class="tc">
