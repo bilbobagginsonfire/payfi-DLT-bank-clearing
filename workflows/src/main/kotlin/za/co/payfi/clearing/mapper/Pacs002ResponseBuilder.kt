@@ -1,34 +1,29 @@
 package za.co.payfi.clearing.mapper
 
-import com.prowidesoftware.swift.model.mx.MxPacs00200110
-import com.prowidesoftware.swift.model.mx.dic.*
 import net.corda.v5.base.annotations.CordaSerializable
 import java.time.Instant
-import java.util.UUID
-import javax.xml.datatype.DatatypeFactory
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 
 /**
  * Builds ISO 20022 pacs.002.001.10 (Payment Status Report) XML responses.
  *
- * Uses Prowide pw-iso20022 SRU2023-9.4.7 classes:
- * - MxPacs00200110
- * - FIToFIPaymentStatusReportV10
- * - GroupHeader91
- * - OriginalGroupHeader17
- * - PaymentTransaction110
- * - StatusReasonInformation12
- * - StatusReason6Choice
+ * Uses JDK string building only — no Prowide or JAXB dependencies.
+ * This avoids OSGi sandbox resolution failures in Corda 5.2.
  *
- * NOTE: ExternalPaymentTransactionStatus1Code does NOT exist in Prowide
- * SRU2023-9.4.7. The transaction status field on PaymentTransaction110
- * is a plain String. We use String constants defined in PaymentStatusCode.
+ * Output XML conforms to namespace:
+ *   urn:iso:std:iso:20022:tech:xsd:pacs.002.001.10
  */
 class Pacs002ResponseBuilder {
 
+    companion object {
+        private const val NS_PACS002 = "urn:iso:std:iso:20022:tech:xsd:pacs.002.001.10"
+        private val ISO_DT_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
+            .withZone(ZoneOffset.UTC)
+    }
+
     /**
      * ISO 20022 payment transaction status codes as String constants.
-     * ExternalPaymentTransactionStatus1Code does not exist in the
-     * Prowide SRU2023-9.4.7 JAR.
      */
     object PaymentStatusCode {
         const val ACCEPTED = "ACCP"            // Accepted Customer Profile
@@ -50,54 +45,50 @@ class Pacs002ResponseBuilder {
     )
 
     fun buildResponse(originalMessageId: String, results: List<TransactionResult>): String {
-        val mx = MxPacs00200110()
-        val statusReport = FIToFIPaymentStatusReportV10()
-        mx.fiToFIPmtStsRpt = statusReport
+        val sb = StringBuilder()
+        sb.append("""<Document xmlns="$NS_PACS002">""")
+        sb.append("<FIToFIPmtStsRpt>")
 
-        val grpHdr = GroupHeader91()
+        // GrpHdr
+        sb.append("<GrpHdr>")
         // Deterministic MsgId derived from inbound originalMessageId.
-        // On flow replay, this produces the same output MsgId, preserving
-        // checkpoint consistency and downstream signature verification.
-        grpHdr.setMsgId("PSR-${originalMessageId}")
-        val factory = DatatypeFactory.newInstance()
-        grpHdr.creDtTm = factory.newXMLGregorianCalendar(
-            java.util.GregorianCalendar.getInstance().apply {
-                timeInMillis = Instant.now().toEpochMilli()
-            }
-        )
-        statusReport.grpHdr = grpHdr
+        // On flow replay, this produces the same output MsgId.
+        sb.append("<MsgId>").append(xmlEscape("PSR-$originalMessageId")).append("</MsgId>")
+        sb.append("<CreDtTm>").append(ISO_DT_FORMAT.format(Instant.now())).append("</CreDtTm>")
+        sb.append("</GrpHdr>")
 
-        val orgnlGrpInf = OriginalGroupHeader17()
-        orgnlGrpInf.setOrgnlMsgId(originalMessageId)
-        orgnlGrpInf.setOrgnlMsgNmId("pacs.008.001.08")
-        statusReport.orgnlGrpInfAndSts = orgnlGrpInf
+        // OrgnlGrpInfAndSts
+        sb.append("<OrgnlGrpInfAndSts>")
+        sb.append("<OrgnlMsgId>").append(xmlEscape(originalMessageId)).append("</OrgnlMsgId>")
+        sb.append("<OrgnlMsgNmId>pacs.008.001.08</OrgnlMsgNmId>")
+        sb.append("</OrgnlGrpInfAndSts>")
 
+        // TxInfAndSts per result
         results.forEach { result ->
-            val txInfAndSts = PaymentTransaction110()
-            txInfAndSts.setOrgnlInstrId(result.originalInstructionId)
-            txInfAndSts.setOrgnlEndToEndId(result.originalEndToEndId)
-            txInfAndSts.setOrgnlTxId(result.originalTransactionId)
+            sb.append("<TxInfAndSts>")
+            sb.append("<OrgnlInstrId>").append(xmlEscape(result.originalInstructionId)).append("</OrgnlInstrId>")
+            sb.append("<OrgnlEndToEndId>").append(xmlEscape(result.originalEndToEndId)).append("</OrgnlEndToEndId>")
+            sb.append("<OrgnlTxId>").append(xmlEscape(result.originalTransactionId)).append("</OrgnlTxId>")
 
             if (result.accepted) {
-                // Use String constant — ExternalPaymentTransactionStatus1Code does not exist
-                txInfAndSts.setTxSts(PaymentStatusCode.ACCEPTED)
+                sb.append("<TxSts>").append(PaymentStatusCode.ACCEPTED).append("</TxSts>")
             } else {
-                txInfAndSts.setTxSts(PaymentStatusCode.REJECTED)
+                sb.append("<TxSts>").append(PaymentStatusCode.REJECTED).append("</TxSts>")
                 if (result.rejectionReasonCode != null) {
-                    val stsRsnInf = StatusReasonInformation12()
-                    val rsn = StatusReason6Choice()
-                    rsn.setCd(result.rejectionReasonCode)
-                    stsRsnInf.rsn = rsn
+                    sb.append("<StsRsnInf>")
+                    sb.append("<Rsn><Cd>").append(xmlEscape(result.rejectionReasonCode)).append("</Cd></Rsn>")
                     if (result.rejectionReasonDescription != null) {
-                        stsRsnInf.addAddtlInf(result.rejectionReasonDescription)
+                        sb.append("<AddtlInf>").append(xmlEscape(result.rejectionReasonDescription)).append("</AddtlInf>")
                     }
-                    txInfAndSts.addStsRsnInf(stsRsnInf)
+                    sb.append("</StsRsnInf>")
                 }
             }
-            statusReport.addTxInfAndSts(txInfAndSts)
+            sb.append("</TxInfAndSts>")
         }
 
-        return mx.message()
+        sb.append("</FIToFIPmtStsRpt>")
+        sb.append("</Document>")
+        return sb.toString()
     }
 
     fun buildAcceptance(
@@ -116,4 +107,16 @@ class Pacs002ResponseBuilder {
             accepted = false, rejectionReasonCode = reasonCode,
             rejectionReasonDescription = reasonDescription)
     ))
+
+    /**
+     * Escape XML special characters in text content.
+     */
+    private fun xmlEscape(text: String): String {
+        return text
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;")
+            .replace("'", "&apos;")
+    }
 }

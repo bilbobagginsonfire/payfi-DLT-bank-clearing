@@ -1,219 +1,308 @@
 package za.co.payfi.clearing.mapper
 
-import com.prowidesoftware.swift.model.mx.MxPacs00800108
-import com.prowidesoftware.swift.model.mx.dic.*
 import za.co.payfi.clearing.states.*
 import za.co.payfi.clearing.persistence.PaymentMessageMetadata
+import java.io.StringReader
+import java.io.StringWriter
 import java.math.BigDecimal
 import java.security.MessageDigest
 import java.security.PublicKey
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 import java.util.UUID
+import javax.xml.XMLConstants
+import javax.xml.namespace.NamespaceContext
+import javax.xml.parsers.DocumentBuilderFactory
+import javax.xml.transform.OutputKeys
+import javax.xml.transform.TransformerFactory
+import javax.xml.transform.dom.DOMSource
+import javax.xml.transform.stream.StreamResult
+import javax.xml.xpath.XPathConstants
+import javax.xml.xpath.XPathFactory
+import org.w3c.dom.Document
+import org.w3c.dom.Element
+import org.w3c.dom.Node
+import org.w3c.dom.NodeList
+import org.xml.sax.InputSource
 
 /**
  * Maps between ISO 20022 pacs.008.001.08 XML and PaymentInstructionState.
  *
+ * Uses JDK DOM + XPath parsing only — no third-party libraries.
+ * This avoids the OSGi sandbox resolution failures caused by Prowide's
+ * transitive JAXB/javax.activation dependencies.
+ *
  * Handles batch messages: a single pacs.008 can contain multiple CdtTrfTxInf
  * blocks. Each block becomes a separate PaymentInstructionState on the ledger.
- *
- * Uses Prowide pw-iso20022 SRU2023-9.4.7 (open source) for XML parsing.
- *
- * IMPORTANT: Prowide dictionary objects use builder-pattern setters that return
- * `this`. In Kotlin, some setters may NOT be recognized as property setters.
- * When `obj.field = value` produces "Variable expected", use the explicit
- * Java setter form `obj.setField(value)` instead.
  */
 class Pacs008Mapper {
 
-    fun fromXml(xml: String, participantKeys: List<PublicKey>): List<PaymentInstructionState> {
-        val mx = MxPacs00800108.parse(xml)
-            ?: throw IllegalArgumentException("Failed to parse pacs.008 XML")
+    companion object {
+        private const val NS_PACS008 = "urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08"
+        private const val NS_PREFIX = "p"
+    }
 
-        val fiToFi = mx.fiToFICstmrCdtTrf
+    /**
+     * Namespace context for pacs.008.001.08 XPath queries.
+     */
+    private class Pacs008NamespaceContext : NamespaceContext {
+        override fun getNamespaceURI(prefix: String): String = when (prefix) {
+            NS_PREFIX -> NS_PACS008
+            else -> XMLConstants.NULL_NS_URI
+        }
+        override fun getPrefix(namespaceURI: String): String? = null
+        override fun getPrefixes(namespaceURI: String): MutableIterator<String> =
+            mutableListOf<String>().iterator()
+    }
+
+    // =========================================================================
+    // Public interface — MUST be preserved (flows call these)
+    // =========================================================================
+
+    fun fromXml(xml: String, participantKeys: List<PublicKey>): List<PaymentInstructionState> {
+        val doc = parseXml(xml)
+        val xpath = newXPath()
+
+        // Validate root structure
+        val fiToFi = xpath.evaluate("//p:FIToFICstmrCdtTrf", doc, XPathConstants.NODE) as? Node
             ?: throw IllegalArgumentException("Missing FIToFICstmrCdtTrf element")
 
-        val transactions = fiToFi.cdtTrfTxInf
-            ?: throw IllegalArgumentException("Missing CdtTrfTxInf elements")
+        val txNodes = xpath.evaluate(
+            "//p:FIToFICstmrCdtTrf/p:CdtTrfTxInf", doc, XPathConstants.NODESET
+        ) as NodeList
 
-        if (transactions.isEmpty()) {
+        if (txNodes.length == 0) {
             throw IllegalArgumentException("pacs.008 must contain at least one CdtTrfTxInf")
         }
 
-        return transactions.map { txInf -> mapTransaction(txInf, participantKeys) }
+        return (0 until txNodes.length).map { i ->
+            mapTransaction(txNodes.item(i) as Element, xpath, participantKeys)
+        }
     }
 
     fun extractMetadata(xml: String): PaymentMessageMetadata {
-        val mx = MxPacs00800108.parse(xml)
-            ?: throw IllegalArgumentException("Failed to parse pacs.008 XML")
+        val doc = parseXml(xml)
+        val xpath = newXPath()
 
-        val grpHdr = mx.fiToFICstmrCdtTrf?.grpHdr
-            ?: throw IllegalArgumentException("Missing GrpHdr element")
+        val msgId = xpath.evaluate("//p:GrpHdr/p:MsgId/text()", doc) ?: ""
+        val creDtTm = xpath.evaluate("//p:GrpHdr/p:CreDtTm/text()", doc) ?: ""
+        val nbOfTxs = xpath.evaluate("//p:GrpHdr/p:NbOfTxs/text()", doc) ?: "1"
 
         val digest = MessageDigest.getInstance("SHA-256")
         val hashBytes = digest.digest(xml.toByteArray(Charsets.UTF_8))
         val hashHex = hashBytes.joinToString("") { "%02x".format(it) }
 
+        val creationTime = try {
+            ZonedDateTime.parse(creDtTm, DateTimeFormatter.ISO_DATE_TIME).toInstant()
+        } catch (e: Exception) {
+            try {
+                // Try parsing without timezone (common in pacs.008: "2026-03-22T10:00:00")
+                java.time.LocalDateTime.parse(creDtTm, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+                    .toInstant(java.time.ZoneOffset.UTC)
+            } catch (e2: Exception) {
+                Instant.now()
+            }
+        }
+
         return PaymentMessageMetadata(
-            originalMessageId = grpHdr.msgId ?: "",
-            messageCreationTime = grpHdr.creDtTm?.toGregorianCalendar()?.toInstant() ?: Instant.now(),
-            numberOfTransactions = grpHdr.nbOfTxs?.toIntOrNull() ?: 1,
+            originalMessageId = msgId,
+            messageCreationTime = creationTime,
+            numberOfTransactions = nbOfTxs.toIntOrNull() ?: 1,
             messageDigest = hashHex,
             receivedAt = Instant.now()
         )
     }
 
     fun toXml(state: PaymentInstructionState): String {
-        val mx = MxPacs00800108()
-        val fiToFi = FIToFICustomerCreditTransferV08()
-        mx.fiToFICstmrCdtTrf = fiToFi
+        val factory = DocumentBuilderFactory.newInstance()
+        factory.isNamespaceAware = true
+        // XXE prevention — required for Corda 5.2 security compliance
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+        factory.setFeature("http://xml.org/sax/features/external-general-entities", false)
+        factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+        val builder = factory.newDocumentBuilder()
+        val doc = builder.newDocument()
 
-        // Group Header — including mandatory CreDtTm
-        val grpHdr = GroupHeader93()
-        // Use explicit Java setter in case builder pattern causes "Variable expected"
-        grpHdr.setMsgId("MSG-${state.stateId}")
-        grpHdr.setNbOfTxs("1")
+        // Root: Document
+        val docElem = doc.createElementNS(NS_PACS008, "Document")
+        docElem.setAttribute("xmlns", NS_PACS008)
+        doc.appendChild(docElem)
 
-        // CreDtTm is MANDATORY per ISO 20022 schema
-        val factory = javax.xml.datatype.DatatypeFactory.newInstance()
-        grpHdr.creDtTm = factory.newXMLGregorianCalendar(
-            java.util.GregorianCalendar.getInstance().apply {
-                timeInMillis = Instant.now().toEpochMilli()
-            }
-        )
+        // FIToFICstmrCdtTrf
+        val fiToFi = appendElement(doc, docElem, "FIToFICstmrCdtTrf")
 
-        fiToFi.grpHdr = grpHdr
+        // GrpHdr
+        val grpHdr = appendElement(doc, fiToFi, "GrpHdr")
+        appendTextElement(doc, grpHdr, "MsgId", "MSG-${state.stateId}")
+        appendTextElement(doc, grpHdr, "CreDtTm", Instant.now().toString())
+        appendTextElement(doc, grpHdr, "NbOfTxs", "1")
+        val sttlmInf = appendElement(doc, grpHdr, "SttlmInf")
+        appendTextElement(doc, sttlmInf, "SttlmMtd", "CLRG")
 
-        // Settlement Information
-        val sttlmInf = SettlementInstruction7()
-        sttlmInf.sttlmMtd = SettlementMethod1Code.CLRG
-        grpHdr.sttlmInf = sttlmInf
+        // CdtTrfTxInf
+        val txInf = appendElement(doc, fiToFi, "CdtTrfTxInf")
 
-        // Credit Transfer Transaction
-        val txInf = CreditTransferTransaction39()
-        fiToFi.addCdtTrfTxInf(txInf)
+        // PmtId
+        val pmtId = appendElement(doc, txInf, "PmtId")
+        appendTextElement(doc, pmtId, "InstrId", state.instructionId)
+        appendTextElement(doc, pmtId, "EndToEndId", state.endToEndId)
+        appendTextElement(doc, pmtId, "TxId", state.transactionId)
 
-        // Payment Identification
-        val pmtId = PaymentIdentification7()
-        pmtId.setInstrId(state.instructionId)
-        pmtId.setEndToEndId(state.endToEndId)
-        pmtId.setTxId(state.transactionId)
-        txInf.pmtId = pmtId
+        // IntrBkSttlmAmt
+        val amt = appendTextElement(doc, txInf, "IntrBkSttlmAmt", state.amount.toPlainString())
+        amt.setAttribute("Ccy", state.currency)
 
-        // Amount
-        val amt = ActiveCurrencyAndAmount()
-        amt.value = state.amount
-        amt.setCcy(state.currency)
-        txInf.intrBkSttlmAmt = amt
+        // IntrBkSttlmDt
+        appendTextElement(doc, txInf, "IntrBkSttlmDt", state.settlementDate.toString())
 
-        // Settlement Date
-        txInf.intrBkSttlmDt = factory.newXMLGregorianCalendar(state.settlementDate.toString())
+        // Dbtr
+        val dbtr = appendElement(doc, txInf, "Dbtr")
+        appendTextElement(doc, dbtr, "Nm", state.debtorName)
 
-        // Debtor
-        val dbtr = PartyIdentification135()
-        dbtr.setNm(state.debtorName)
-        txInf.dbtr = dbtr
-        setDebtorId(dbtr, state.debtorIdType, state.debtorIdNumber)
-
-        // Debtor Address — use explicit local variable to avoid smart cast across modules
+        // Debtor Address
         val addr = state.debtorAddress
         if (addr != null) {
-            val pstlAdr = PostalAddress24()
-            pstlAdr.setStrtNm(addr.streetName)
-            pstlAdr.setBldgNb(addr.buildingNumber)
-            pstlAdr.setPstCd(addr.postCode)
-            pstlAdr.setTwnNm(addr.townName)
-            pstlAdr.setCtry(addr.country)
-            dbtr.pstlAdr = pstlAdr
+            val pstlAdr = appendElement(doc, dbtr, "PstlAdr")
+            if (!addr.streetName.isNullOrBlank()) appendTextElement(doc, pstlAdr, "StrtNm", addr.streetName)
+            if (!addr.buildingNumber.isNullOrBlank()) appendTextElement(doc, pstlAdr, "BldgNb", addr.buildingNumber)
+            if (!addr.postCode.isNullOrBlank()) appendTextElement(doc, pstlAdr, "PstCd", addr.postCode)
+            if (!addr.townName.isNullOrBlank()) appendTextElement(doc, pstlAdr, "TwnNm", addr.townName)
+            if (!addr.country.isNullOrBlank()) appendTextElement(doc, pstlAdr, "Ctry", addr.country)
         }
 
-        // Debtor Account
-        val dbtrAcct = CashAccount38()
-        val dbtrAcctId = AccountIdentification4Choice()
-        val dbtrOthr = GenericAccountIdentification1()
-        dbtrOthr.setId(state.debtorAccount)
-        dbtrAcctId.othr = dbtrOthr
-        dbtrAcct.id = dbtrAcctId
-        txInf.dbtrAcct = dbtrAcct
+        // Debtor Id
+        val dbtrIdElem = appendElement(doc, dbtr, "Id")
+        when (state.debtorIdType) {
+            DebtorIdType.SA_NATIONAL_ID, DebtorIdType.PASSPORT, DebtorIdType.UNIQUE_CUSTOMER_ID -> {
+                val prvtId = appendElement(doc, dbtrIdElem, "PrvtId")
+                val othr = appendElement(doc, prvtId, "Othr")
+                appendTextElement(doc, othr, "Id", state.debtorIdNumber)
+                val schmeNm = appendElement(doc, othr, "SchmeNm")
+                appendTextElement(doc, schmeNm, "Cd", when (state.debtorIdType) {
+                    DebtorIdType.SA_NATIONAL_ID -> "NIDN"
+                    DebtorIdType.PASSPORT -> "CCPT"
+                    DebtorIdType.UNIQUE_CUSTOMER_ID -> "CUST"
+                    else -> "NIDN"
+                })
+            }
+            DebtorIdType.BUSINESS_REGISTRATION_ID -> {
+                val orgId = appendElement(doc, dbtrIdElem, "OrgId")
+                val othr = appendElement(doc, orgId, "Othr")
+                appendTextElement(doc, othr, "Id", state.debtorIdNumber)
+            }
+        }
 
-        // Debtor Agent
-        val dbtrAgt = BranchAndFinancialInstitutionIdentification6()
-        val dbtrFinInstn = FinancialInstitutionIdentification18()
-        val dbtrClrSys = ClearingSystemMemberIdentification2()
-        dbtrClrSys.setMmbId(state.debtorAgentBranchCode)
-        dbtrFinInstn.clrSysMmbId = dbtrClrSys
-        dbtrAgt.finInstnId = dbtrFinInstn
-        txInf.dbtrAgt = dbtrAgt
+        // DbtrAcct
+        val dbtrAcct = appendElement(doc, txInf, "DbtrAcct")
+        val dbtrAcctId = appendElement(doc, dbtrAcct, "Id")
+        val dbtrOthr = appendElement(doc, dbtrAcctId, "Othr")
+        appendTextElement(doc, dbtrOthr, "Id", state.debtorAccount)
 
-        // Creditor
-        val cdtr = PartyIdentification135()
-        cdtr.setNm(state.creditorName)
-        txInf.cdtr = cdtr
+        // DbtrAgt
+        val dbtrAgt = appendElement(doc, txInf, "DbtrAgt")
+        val dbtrFinInstn = appendElement(doc, dbtrAgt, "FinInstnId")
+        val dbtrClrSys = appendElement(doc, dbtrFinInstn, "ClrSysMmbId")
+        appendTextElement(doc, dbtrClrSys, "MmbId", state.debtorAgentBranchCode)
 
-        // Creditor Account
-        val cdtrAcct = CashAccount38()
-        val cdtrAcctId = AccountIdentification4Choice()
-        val cdtrOthr = GenericAccountIdentification1()
-        cdtrOthr.setId(state.creditorAccount)
-        cdtrAcctId.othr = cdtrOthr
-        cdtrAcct.id = cdtrAcctId
-        txInf.cdtrAcct = cdtrAcct
+        // Cdtr
+        val cdtr = appendElement(doc, txInf, "Cdtr")
+        appendTextElement(doc, cdtr, "Nm", state.creditorName)
 
-        // Creditor Agent
-        val cdtrAgt = BranchAndFinancialInstitutionIdentification6()
-        val cdtrFinInstn = FinancialInstitutionIdentification18()
-        val cdtrClrSys = ClearingSystemMemberIdentification2()
-        cdtrClrSys.setMmbId(state.creditorAgentBranchCode)
-        cdtrFinInstn.clrSysMmbId = cdtrClrSys
-        cdtrAgt.finInstnId = cdtrFinInstn
-        txInf.cdtrAgt = cdtrAgt
+        // CdtrAcct
+        val cdtrAcct = appendElement(doc, txInf, "CdtrAcct")
+        val cdtrAcctId = appendElement(doc, cdtrAcct, "Id")
+        val cdtrOthr = appendElement(doc, cdtrAcctId, "Othr")
+        appendTextElement(doc, cdtrOthr, "Id", state.creditorAccount)
 
-        // Remittance
+        // CdtrAgt
+        val cdtrAgt = appendElement(doc, txInf, "CdtrAgt")
+        val cdtrFinInstn = appendElement(doc, cdtrAgt, "FinInstnId")
+        val cdtrClrSys = appendElement(doc, cdtrFinInstn, "ClrSysMmbId")
+        appendTextElement(doc, cdtrClrSys, "MmbId", state.creditorAgentBranchCode)
+
+        // RmtInf
         if (!state.remittanceInfo.isNullOrBlank()) {
-            val rmtInf = RemittanceInformation16()
-            rmtInf.addUstrd(state.remittanceInfo)
-            txInf.rmtInf = rmtInf
+            val rmtInf = appendElement(doc, txInf, "RmtInf")
+            appendTextElement(doc, rmtInf, "Ustrd", state.remittanceInfo)
         }
 
-        return mx.message()
+        return serializeDocument(doc)
     }
 
-    // --- Private ---
+    // =========================================================================
+    // Private — XML parsing helpers
+    // =========================================================================
+
+    private fun parseXml(xml: String): Document {
+        val factory = DocumentBuilderFactory.newInstance()
+        factory.isNamespaceAware = true
+        // XXE prevention — required for Corda 5.2 security compliance
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+        factory.setFeature("http://xml.org/sax/features/external-general-entities", false)
+        factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+        val builder = factory.newDocumentBuilder()
+        return builder.parse(InputSource(StringReader(xml)))
+    }
+
+    private fun newXPath(): javax.xml.xpath.XPath {
+        val xpath = XPathFactory.newInstance().newXPath()
+        xpath.namespaceContext = Pacs008NamespaceContext()
+        return xpath
+    }
 
     private fun mapTransaction(
-        txInf: CreditTransferTransaction39,
+        txNode: Element,
+        xpath: javax.xml.xpath.XPath,
         participantKeys: List<PublicKey>
     ): PaymentInstructionState {
 
-        val pmtId = txInf.pmtId ?: throw IllegalArgumentException("Missing PmtId")
+        // Payment Identification
+        val instrId = xpathText(xpath, "p:PmtId/p:InstrId", txNode)
+        val endToEndId = xpathText(xpath, "p:PmtId/p:EndToEndId", txNode)
+        val txId = xpathText(xpath, "p:PmtId/p:TxId", txNode)
 
-        val sttlmAmt = txInf.intrBkSttlmAmt ?: throw IllegalArgumentException("Missing IntrBkSttlmAmt")
-        val currency = sttlmAmt.ccy ?: ""
+        if (instrId.isBlank()) throw IllegalArgumentException("Missing PmtId/InstrId")
+
+        // Amount and Currency
+        val amtNode = xpath.evaluate("p:IntrBkSttlmAmt", txNode, XPathConstants.NODE) as? Element
+            ?: throw IllegalArgumentException("Missing IntrBkSttlmAmt")
+        val currency = amtNode.getAttribute("Ccy") ?: ""
         if (currency != "ZAR") throw IllegalArgumentException("AM03: Currency must be ZAR, got $currency")
-        val amount = sttlmAmt.value ?: BigDecimal.ZERO
-
-        val settlementDate = txInf.intrBkSttlmDt?.let {
-            LocalDate.parse(it.toString().substring(0, 10))
-        } ?: LocalDate.now()
-
-        val dbtr = txInf.dbtr
-        val (debtorIdType, debtorIdNumber) = extractDebtorId(dbtr)
-
-        // Use local variable for debtorAddress to avoid smart cast across modules (Issue 11)
-        val debtorPstlAdr = dbtr?.pstlAdr
-        val debtorAddress = if (debtorPstlAdr != null) {
-            StructuredAddress(
-                streetName = debtorPstlAdr.strtNm,
-                buildingNumber = debtorPstlAdr.bldgNb,
-                postCode = debtorPstlAdr.pstCd,
-                townName = debtorPstlAdr.twnNm,
-                country = debtorPstlAdr.ctry
-            )
-        } else {
-            null
+        val amount = try {
+            BigDecimal(amtNode.textContent.trim())
+        } catch (e: Exception) {
+            BigDecimal.ZERO
         }
 
-        val creditorAgentBranchCode = txInf.cdtrAgt?.finInstnId?.clrSysMmbId?.mmbId ?: ""
+        // Settlement Date
+        val sttlmDtStr = xpathText(xpath, "p:IntrBkSttlmDt", txNode)
+        val settlementDate = if (sttlmDtStr.isNotBlank()) {
+            try { LocalDate.parse(sttlmDtStr.substring(0, 10)) } catch (e: Exception) { LocalDate.now() }
+        } else {
+            LocalDate.now()
+        }
+
+        // Debtor
+        val debtorName = xpathText(xpath, "p:Dbtr/p:Nm", txNode)
+        val (debtorIdType, debtorIdNumber) = extractDebtorId(xpath, txNode)
+
+        // Debtor Address
+        val debtorAddress = extractAddress(xpath, "p:Dbtr/p:PstlAdr", txNode)
+
+        // Debtor Account and Agent
+        val debtorAccount = xpathText(xpath, "p:DbtrAcct/p:Id/p:Othr/p:Id", txNode)
+        val debtorAgentBranchCode = xpathText(xpath, "p:DbtrAgt/p:FinInstnId/p:ClrSysMmbId/p:MmbId", txNode)
+
+        // Creditor
+        val creditorName = xpathText(xpath, "p:Cdtr/p:Nm", txNode)
+        val creditorAccount = xpathText(xpath, "p:CdtrAcct/p:Id/p:Othr/p:Id", txNode)
+        val creditorAgentBranchCode = xpathText(xpath, "p:CdtrAgt/p:FinInstnId/p:ClrSysMmbId/p:MmbId", txNode)
+
+        // Remittance and Purpose
+        val remittanceInfo = xpathText(xpath, "p:RmtInf/p:Ustrd", txNode).ifBlank { null }
+        val purposeCode = xpathText(xpath, "p:Purp/p:Cd", txNode).ifBlank { null }
 
         // Fee calculation using pilot constants
         val feeApplicable = amount > PilotFeeConstants.THRESHOLD_AMOUNT
@@ -225,25 +314,25 @@ class Pacs008Mapper {
             // On flow retry, the mapper regenerates the same stateId, ensuring
             // downstream persist() dedup IDs remain stable.
             stateId = UUID.nameUUIDFromBytes(
-                "${pmtId.instrId}-${pmtId.txId}".toByteArray(Charsets.UTF_8)
+                "${instrId}-${txId}".toByteArray(Charsets.UTF_8)
             ),
-            instructionId = pmtId.instrId ?: "",
-            endToEndId = pmtId.endToEndId ?: "",
-            transactionId = pmtId.txId ?: "",
+            instructionId = instrId,
+            endToEndId = endToEndId,
+            transactionId = txId,
             amount = amount,
             currency = currency,
             settlementDate = settlementDate,
-            debtorName = dbtr?.nm ?: "",
+            debtorName = debtorName,
             debtorIdType = debtorIdType,
             debtorIdNumber = debtorIdNumber,
             debtorAddress = debtorAddress,
-            debtorAccount = txInf.dbtrAcct?.id?.othr?.id ?: "",
-            debtorAgentBranchCode = txInf.dbtrAgt?.finInstnId?.clrSysMmbId?.mmbId ?: "",
-            creditorName = txInf.cdtr?.nm ?: "",
-            creditorAccount = txInf.cdtrAcct?.id?.othr?.id ?: "",
+            debtorAccount = debtorAccount,
+            debtorAgentBranchCode = debtorAgentBranchCode,
+            creditorName = creditorName,
+            creditorAccount = creditorAccount,
             creditorAgentBranchCode = creditorAgentBranchCode,
-            remittanceInfo = txInf.rmtInf?.ustrd?.firstOrNull(),
-            purposeCode = txInf.purp?.cd,
+            remittanceInfo = remittanceInfo,
+            purposeCode = purposeCode,
             status = PaymentStatus.SUBMITTED,
             feeApplicable = feeApplicable,
             feeAmount = feeAmount,
@@ -253,59 +342,96 @@ class Pacs008Mapper {
         )
     }
 
-    private fun extractDebtorId(dbtr: PartyIdentification135?): Pair<DebtorIdType, String> {
-        val id = dbtr?.id ?: return Pair(DebtorIdType.SA_NATIONAL_ID, "")
-
-        val prvtId = id.prvtId
-        if (prvtId != null) {
-            val othr = prvtId.othr?.firstOrNull()
-            if (othr != null) {
-                val idNumber = othr.id ?: ""
-                return when (othr.schmeNm?.cd ?: "") {
-                    "NIDN" -> Pair(DebtorIdType.SA_NATIONAL_ID, idNumber)
-                    "CCPT" -> Pair(DebtorIdType.PASSPORT, idNumber)
-                    "CUST" -> Pair(DebtorIdType.UNIQUE_CUSTOMER_ID, idNumber)
-                    else -> Pair(DebtorIdType.SA_NATIONAL_ID, idNumber)
-                }
+    private fun extractDebtorId(
+        xpath: javax.xml.xpath.XPath,
+        txNode: Element
+    ): Pair<DebtorIdType, String> {
+        // Try PrvtId/Othr first (personal identification)
+        val prvtIdNumber = xpathText(xpath, "p:Dbtr/p:Id/p:PrvtId/p:Othr/p:Id", txNode)
+        if (prvtIdNumber.isNotBlank()) {
+            val schemeCd = xpathText(xpath, "p:Dbtr/p:Id/p:PrvtId/p:Othr/p:SchmeNm/p:Cd", txNode)
+            return when (schemeCd) {
+                "NIDN" -> Pair(DebtorIdType.SA_NATIONAL_ID, prvtIdNumber)
+                "CCPT" -> Pair(DebtorIdType.PASSPORT, prvtIdNumber)
+                "CUST" -> Pair(DebtorIdType.UNIQUE_CUSTOMER_ID, prvtIdNumber)
+                else -> Pair(DebtorIdType.SA_NATIONAL_ID, prvtIdNumber)
             }
         }
 
-        val orgId = id.orgId
-        if (orgId != null) {
-            val othr = orgId.othr?.firstOrNull()
-            if (othr != null) return Pair(DebtorIdType.BUSINESS_REGISTRATION_ID, othr.id ?: "")
+        // Try OrgId/Othr (organisation identification)
+        val orgIdNumber = xpathText(xpath, "p:Dbtr/p:Id/p:OrgId/p:Othr/p:Id", txNode)
+        if (orgIdNumber.isNotBlank()) {
+            return Pair(DebtorIdType.BUSINESS_REGISTRATION_ID, orgIdNumber)
         }
 
         return Pair(DebtorIdType.SA_NATIONAL_ID, "")
     }
 
-    private fun setDebtorId(dbtr: PartyIdentification135, idType: DebtorIdType, idNumber: String) {
-        val partyId = Party38Choice()
-        dbtr.id = partyId
+    private fun extractAddress(
+        xpath: javax.xml.xpath.XPath,
+        basePath: String,
+        context: Element
+    ): StructuredAddress? {
+        val addrNode = xpath.evaluate(basePath, context, XPathConstants.NODE) as? Element
+            ?: return null
 
-        when (idType) {
-            DebtorIdType.SA_NATIONAL_ID, DebtorIdType.PASSPORT, DebtorIdType.UNIQUE_CUSTOMER_ID -> {
-                val prvtId = PersonIdentification13()
-                val othr = GenericPersonIdentification1()
-                othr.setId(idNumber)
-                val schmeNm = PersonIdentificationSchemeName1Choice()
-                schmeNm.setCd(when (idType) {
-                    DebtorIdType.SA_NATIONAL_ID -> "NIDN"
-                    DebtorIdType.PASSPORT -> "CCPT"
-                    DebtorIdType.UNIQUE_CUSTOMER_ID -> "CUST"
-                    else -> "NIDN"
-                })
-                othr.schmeNm = schmeNm
-                prvtId.addOthr(othr)
-                partyId.prvtId = prvtId
-            }
-            DebtorIdType.BUSINESS_REGISTRATION_ID -> {
-                val orgId = OrganisationIdentification29()
-                val othr = GenericOrganisationIdentification1()
-                othr.setId(idNumber)
-                orgId.addOthr(othr)
-                partyId.orgId = orgId
-            }
+        val streetName = xpathText(xpath, "p:StrtNm", addrNode).ifBlank { null }
+        val buildingNumber = xpathText(xpath, "p:BldgNb", addrNode).ifBlank { null }
+        val postCode = xpathText(xpath, "p:PstCd", addrNode).ifBlank { null }
+        val townName = xpathText(xpath, "p:TwnNm", addrNode).ifBlank { null }
+        val country = xpathText(xpath, "p:Ctry", addrNode).ifBlank { null }
+
+        return if (streetName != null || buildingNumber != null || townName != null || country != null) {
+            StructuredAddress(
+                streetName = streetName,
+                buildingNumber = buildingNumber,
+                postCode = postCode,
+                townName = townName,
+                country = country
+            )
+        } else {
+            null
         }
+    }
+
+    /**
+     * Evaluate XPath returning text content, or empty string if not found.
+     */
+    private fun xpathText(
+        xpath: javax.xml.xpath.XPath,
+        expression: String,
+        context: Any
+    ): String {
+        return try {
+            xpath.evaluate("$expression/text()", context)?.trim() ?: ""
+        } catch (e: Exception) {
+            ""
+        }
+    }
+
+    // =========================================================================
+    // Private — XML building helpers
+    // =========================================================================
+
+    private fun appendElement(doc: Document, parent: Element, localName: String): Element {
+        val elem = doc.createElementNS(NS_PACS008, localName)
+        parent.appendChild(elem)
+        return elem
+    }
+
+    private fun appendTextElement(doc: Document, parent: Element, localName: String, text: String): Element {
+        val elem = doc.createElementNS(NS_PACS008, localName)
+        elem.textContent = text
+        parent.appendChild(elem)
+        return elem
+    }
+
+    private fun serializeDocument(doc: Document): String {
+        val transformer = TransformerFactory.newInstance().newTransformer()
+        transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes")
+        transformer.setOutputProperty(OutputKeys.INDENT, "no")
+        val writer = StringWriter()
+        transformer.transform(DOMSource(doc), StreamResult(writer))
+        return writer.toString()
     }
 }
