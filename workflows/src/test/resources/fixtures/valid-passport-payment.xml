@@ -2,8 +2,8 @@
 <Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
     <FIToFICstmrCdtTrf>
         <GrpHdr>
-            <MsgId>MSG-TEST-001</MsgId>
-            <CreDtTm>2026-03-22T10:00:00</CreDtTm>
+            <MsgId>MSG-TEST-002</MsgId>
+            <CreDtTm>2026-03-22T10:05:00</CreDtTm>
             <NbOfTxs>1</NbOfTxs>
             <SttlmInf>
                 <SttlmMtd>CLRG</SttlmMtd>
@@ -11,27 +11,26 @@
         </GrpHdr>
         <CdtTrfTxInf>
             <PmtId>
-                <InstrId>INSTR-001</InstrId>
-                <EndToEndId>E2E-001</EndToEndId>
-                <TxId>TX-001</TxId>
+                <InstrId>INSTR-002</InstrId>
+                <EndToEndId>E2E-002</EndToEndId>
+                <TxId>TX-002</TxId>
             </PmtId>
-            <IntrBkSttlmAmt Ccy="ZAR">15000.00</IntrBkSttlmAmt>
+            <IntrBkSttlmAmt Ccy="ZAR">5000.00</IntrBkSttlmAmt>
             <IntrBkSttlmDt>2026-03-22</IntrBkSttlmDt>
             <Dbtr>
-                <Nm>Sipho Nkosi</Nm>
+                <Nm>James Smith</Nm>
                 <PstlAdr>
-                    <StrtNm>12 Nelson Mandela Drive</StrtNm>
-                    <BldgNb>12</BldgNb>
-                    <PstCd>2000</PstCd>
-                    <TwnNm>Johannesburg</TwnNm>
+                    <StrtNm>10 Main Road</StrtNm>
+                    <PstCd>8001</PstCd>
+                    <TwnNm>Cape Town</TwnNm>
                     <Ctry>ZA</Ctry>
                 </PstlAdr>
                 <Id>
                     <PrvtId>
                         <Othr>
-                            <Id>7801015012082</Id>
+                            <Id>A12345678</Id>
                             <SchmeNm>
-                                <Cd>NIDN</Cd>
+                                <Cd>CCPT</Cd>
                             </SchmeNm>
                         </Othr>
                     </PrvtId>
@@ -40,36 +39,36 @@
             <DbtrAcct>
                 <Id>
                     <Othr>
-                        <Id>62012345678</Id>
+                        <Id>62098765432</Id>
                     </Othr>
                 </Id>
             </DbtrAcct>
             <DbtrAgt>
                 <FinInstnId>
                     <ClrSysMmbId>
-                        <MmbId>100001</MmbId>
+                        <MmbId>200002</MmbId>
                     </ClrSysMmbId>
                 </FinInstnId>
             </DbtrAgt>
             <Cdtr>
-                <Nm>ABC Trading (Pty) Ltd</Nm>
+                <Nm>Garden Route Guesthouse</Nm>
             </Cdtr>
             <CdtrAcct>
                 <Id>
                     <Othr>
-                        <Id>40567890123</Id>
+                        <Id>40111222333</Id>
                     </Othr>
                 </Id>
             </CdtrAcct>
             <CdtrAgt>
                 <FinInstnId>
                     <ClrSysMmbId>
-                        <MmbId>200002</MmbId>
+                        <MmbId>300003</MmbId>
                     </ClrSysMmbId>
                 </FinInstnId>
             </CdtrAgt>
             <RmtInf>
-                <Ustrd>Invoice INV-2026-0342 payment</Ustrd>
+                <Ustrd>Accommodation booking REF-44521</Ustrd>
             </RmtInf>
         </CdtTrfTxInf>
     </FIToFICstmrCdtTrf>

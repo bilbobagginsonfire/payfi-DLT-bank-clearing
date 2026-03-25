@@ -3,12 +3,16 @@ package za.co.payfi.clearing.flows
 import net.corda.v5.application.flows.*
 import net.corda.v5.application.marshalling.JsonMarshallingService
 import net.corda.v5.application.membership.MemberLookup
+import net.corda.v5.application.messaging.FlowMessaging
+import net.corda.v5.application.messaging.FlowSession
 import net.corda.v5.application.persistence.PersistenceService
 import net.corda.v5.base.annotations.CordaSerializable
 import net.corda.v5.base.annotations.Suspendable
+import net.corda.v5.base.exceptions.CordaRuntimeException
 import net.corda.v5.base.types.MemberX500Name
-import net.corda.v5.ledger.notary.plugin.api.NotaryLookup
+import net.corda.v5.ledger.common.NotaryLookup
 import net.corda.v5.ledger.utxo.UtxoLedgerService
+import org.slf4j.LoggerFactory
 import za.co.payfi.clearing.contracts.PaymentInstructionContract
 import za.co.payfi.clearing.persistence.*
 import za.co.payfi.clearing.states.*
@@ -17,6 +21,56 @@ import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
+
+// ============================================================================
+// SHARED HELPERS — branch code / role derived from X500 organisation (demo-only)
+// ============================================================================
+
+/**
+ * Demo-only workaround: derive branch code from X500 organisation name.
+ * In production, this would come from MGM-provided member metadata
+ * (memberProvidedContext). memberProvidedContext is NOT available in
+ * static network config.
+ */
+internal fun getBranchCode(memberName: MemberX500Name): String = when (memberName.organisation) {
+    "BankAlpha" -> "100001"
+    "BankBeta" -> "200002"
+    else -> throw CordaRuntimeException("Unknown bank: ${memberName.organisation}")
+}
+
+internal fun getRole(memberName: MemberX500Name): String = when (memberName.organisation) {
+    "BankAlpha", "BankBeta" -> "PARTICIPANT"
+    "SARB" -> "REGULATOR_OBSERVER"
+    else -> "UNKNOWN"
+}
+
+internal fun findMemberByBranchCode(
+    branchCode: String,
+    memberLookup: MemberLookup
+): MemberX500Name? {
+    val targetOrg = when (branchCode) {
+        "100001" -> "BankAlpha"
+        "200002" -> "BankBeta"
+        else -> return null
+    }
+    return memberLookup.lookup().firstOrNull { it.name.organisation == targetOrg }?.name
+}
+
+internal fun findSarbObserver(memberLookup: MemberLookup): MemberX500Name? {
+    return memberLookup.lookup().firstOrNull { it.name.organisation == "SARB" }?.name
+}
+
+/**
+ * DTO sent to SARB observer after finality for lifecycle transitions.
+ */
+@CordaSerializable
+data class LifecycleNotificationDto(
+    val stateId: String,
+    val instructionId: String,
+    val newStatus: String,
+    val statusReason: String?,
+    val updatedAt: String
+)
 
 // ============================================================================
 // UPDATE PAYMENT STATUS FLOW
@@ -29,10 +83,16 @@ import java.util.UUID
 @InitiatingFlow(protocol = "update-payment-status")
 class UpdatePaymentStatusFlow : ClientStartableFlow {
 
-    @CordaInject lateinit var utxoLedgerService: UtxoLedgerService
+    private companion object {
+        val log = LoggerFactory.getLogger(UpdatePaymentStatusFlow::class.java)
+    }
+
+    @CordaInject lateinit var ledgerService: UtxoLedgerService
     @CordaInject lateinit var memberLookup: MemberLookup
     @CordaInject lateinit var notaryLookup: NotaryLookup
     @CordaInject lateinit var jsonMarshallingService: JsonMarshallingService
+    @CordaInject lateinit var flowEngine: FlowEngine
+    @CordaInject lateinit var flowMessaging: FlowMessaging
 
     @CordaSerializable
     data class Input(val stateId: String, val newStatus: String, val statusReason: String? = null)
@@ -49,22 +109,34 @@ class UpdatePaymentStatusFlow : ClientStartableFlow {
         val currentState = stateAndRef.state.contractState
 
         // Authorization: caller must be debtor or creditor bank
-        verifyCallerIsParticipant(currentState)
+        val myBranchCode = getBranchCode(memberLookup.myInfo().name)
+        require(
+            myBranchCode == currentState.debtorAgentBranchCode ||
+            myBranchCode == currentState.creditorAgentBranchCode
+        ) { "Caller ($myBranchCode) is not a participant on this transaction" }
 
         val updatedState = currentState.withStatus(newStatus, input.statusReason)
-        val notary = notaryLookup.notaryServices.first()
+        val notary = notaryLookup.notaryServices.single()
 
-        val txBuilder = utxoLedgerService.createTransactionBuilder()
+        val txBuilder = ledgerService.createTransactionBuilder()
             .setNotary(notary.name)
-            .setTimeWindowBetween(Instant.now(), Instant.now().plus(Duration.ofSeconds(60)))
+            .setTimeWindowBetween(
+                Instant.now(),
+                Instant.now().plusMillis(Duration.ofSeconds(60).toMillis())
+            )
             .addInputState(stateAndRef.ref)
             .addOutputState(updatedState)
             .addCommand(PaymentInstructionContract.PaymentCommand.UpdateStatus())
             .addSignatories(updatedState.participants)
 
         val signedTx = txBuilder.toSignedTransaction()
-        val sessions = buildSessionList(currentState)
-        utxoLedgerService.finalize(signedTx, sessions)
+
+        // Finality sessions — counterparty only (not SARB)
+        val finalitySessions = buildFinalitySessions(currentState, myBranchCode)
+        ledgerService.finalize(signedTx, finalitySessions)
+
+        // Notify SARB observer AFTER finality
+        notifySarb(currentState, newStatus, input.statusReason)
 
         return jsonMarshallingService.format(Output(
             input.stateId, newStatus.name, true, "Status updated to $newStatus"
@@ -73,51 +145,59 @@ class UpdatePaymentStatusFlow : ClientStartableFlow {
 
     @Suspendable
     private fun findStateById(stateId: UUID) =
-        utxoLedgerService.findUnconsumedStatesByType(PaymentInstructionState::class.java)
-            .firstOrNull { it.state.contractState.stateId == stateId }
-            ?: throw IllegalArgumentException("State not found: $stateId")
+        ledgerService.findUnconsumedStatesByExactType(
+            PaymentInstructionState::class.java, 100, Instant.now()
+        ).results.firstOrNull { it.state.contractState.stateId == stateId }
+            ?: throw CordaRuntimeException("State not found: $stateId")
 
     @Suspendable
-    private fun verifyCallerIsParticipant(state: PaymentInstructionState) {
-        val myBranchCode = memberLookup.myInfo().memberProvidedContext["branchCode"] ?: ""
-        require(
-            myBranchCode == state.debtorAgentBranchCode ||
-            myBranchCode == state.creditorAgentBranchCode
-        ) { "Caller ($myBranchCode) is not a participant on this transaction" }
-    }
-
-    @Suspendable
-    private fun buildSessionList(state: PaymentInstructionState): List<FlowSession> {
-        val myBranchCode = memberLookup.myInfo().memberProvidedContext["branchCode"] ?: ""
+    private fun buildFinalitySessions(
+        state: PaymentInstructionState,
+        myBranchCode: String
+    ): List<FlowSession> {
         val sessions = mutableListOf<FlowSession>()
-
-        // Counterparty session (skip if same-bank)
         if (state.debtorAgentBranchCode != state.creditorAgentBranchCode) {
             val counterpartyBranch = if (myBranchCode == state.debtorAgentBranchCode) {
                 state.creditorAgentBranchCode
             } else {
                 state.debtorAgentBranchCode
             }
-            memberLookup.lookup()
-                .filter { it.memberProvidedContext["branchCode"] == counterpartyBranch }
-                .firstOrNull()?.let { sessions.add(initiateFlow(it.name)) }
+            val counterparty = findMemberByBranchCode(counterpartyBranch, memberLookup)
+            if (counterparty != null) {
+                sessions.add(flowMessaging.initiateFlow(counterparty))
+            }
         }
-
-        // SARB observer session
-        memberLookup.lookup()
-            .filter { it.memberProvidedContext["role"] == "REGULATOR_OBSERVER" }
-            .firstOrNull()?.let { sessions.add(initiateFlow(it.name)) }
-
         return sessions
+    }
+
+    @Suspendable
+    private fun notifySarb(state: PaymentInstructionState, newStatus: PaymentStatus, reason: String?) {
+        val sarbX500 = findSarbObserver(memberLookup) ?: return
+        val sarbSession = flowMessaging.initiateFlow(sarbX500)
+        sarbSession.send(LifecycleNotificationDto(
+            stateId = state.stateId.toString(),
+            instructionId = state.instructionId,
+            newStatus = newStatus.name,
+            statusReason = reason,
+            updatedAt = Instant.now().toString()
+        ))
+        sarbSession.close()
     }
 }
 
 @InitiatedBy(protocol = "update-payment-status")
 class UpdatePaymentStatusResponderFlow : ResponderFlow {
-    @CordaInject lateinit var utxoLedgerService: UtxoLedgerService
+    @CordaInject lateinit var ledgerService: UtxoLedgerService
+    @CordaInject lateinit var memberLookup: MemberLookup
+
     @Suspendable
     override fun call(session: FlowSession) {
-        utxoLedgerService.receiveFinality(session) { _ -> }
+        val myOrg = memberLookup.myInfo().name.organisation
+        if (myOrg == "SARB") {
+            val dto = session.receive(LifecycleNotificationDto::class.java)
+            return
+        }
+        ledgerService.receiveFinality(session) { _ -> }
     }
 }
 
@@ -131,10 +211,12 @@ class UpdatePaymentStatusResponderFlow : ResponderFlow {
 @InitiatingFlow(protocol = "request-cancellation")
 class RequestCancellationFlow : ClientStartableFlow {
 
-    @CordaInject lateinit var utxoLedgerService: UtxoLedgerService
+    @CordaInject lateinit var ledgerService: UtxoLedgerService
     @CordaInject lateinit var memberLookup: MemberLookup
     @CordaInject lateinit var notaryLookup: NotaryLookup
     @CordaInject lateinit var jsonMarshallingService: JsonMarshallingService
+    @CordaInject lateinit var flowEngine: FlowEngine
+    @CordaInject lateinit var flowMessaging: FlowMessaging
 
     @CordaSerializable
     data class Input(val stateId: String, val cancellationReason: String)
@@ -146,14 +228,15 @@ class RequestCancellationFlow : ClientStartableFlow {
         val input = requestBody.getRequestBodyAs(jsonMarshallingService, Input::class.java)
         val stateId = UUID.fromString(input.stateId)
 
-        val stateAndRef = utxoLedgerService.findUnconsumedStatesByType(PaymentInstructionState::class.java)
-            .firstOrNull { it.state.contractState.stateId == stateId }
-            ?: throw IllegalArgumentException("State not found: $stateId")
+        val stateAndRef = ledgerService.findUnconsumedStatesByExactType(
+            PaymentInstructionState::class.java, 100, Instant.now()
+        ).results.firstOrNull { it.state.contractState.stateId == stateId }
+            ?: throw CordaRuntimeException("State not found: $stateId")
 
         val currentState = stateAndRef.state.contractState
 
         // Authorization: only the debtor bank (originator) may request cancellation
-        val myBranchCode = memberLookup.myInfo().memberProvidedContext["branchCode"] ?: ""
+        val myBranchCode = getBranchCode(memberLookup.myInfo().name)
         require(myBranchCode == currentState.debtorAgentBranchCode) {
             "Only the debtor bank may request cancellation"
         }
@@ -161,48 +244,67 @@ class RequestCancellationFlow : ClientStartableFlow {
         val updatedState = currentState.withStatus(
             PaymentStatus.CANCELLATION_REQUESTED, input.cancellationReason
         )
-        val notary = notaryLookup.notaryServices.first()
+        val notary = notaryLookup.notaryServices.single()
 
-        val txBuilder = utxoLedgerService.createTransactionBuilder()
+        val txBuilder = ledgerService.createTransactionBuilder()
             .setNotary(notary.name)
-            .setTimeWindowBetween(Instant.now(), Instant.now().plus(Duration.ofSeconds(60)))
+            .setTimeWindowBetween(
+                Instant.now(),
+                Instant.now().plusMillis(Duration.ofSeconds(60).toMillis())
+            )
             .addInputState(stateAndRef.ref)
             .addOutputState(updatedState)
             .addCommand(PaymentInstructionContract.PaymentCommand.RequestCancellation())
             .addSignatories(updatedState.participants)
 
         val signedTx = txBuilder.toSignedTransaction()
-        val sessions = buildSessionList(currentState, myBranchCode)
-        utxoLedgerService.finalize(signedTx, sessions)
+
+        // Finality with counterparty only
+        val finalitySessions = mutableListOf<FlowSession>()
+        if (currentState.debtorAgentBranchCode != currentState.creditorAgentBranchCode) {
+            val counterparty = findMemberByBranchCode(
+                currentState.creditorAgentBranchCode, memberLookup
+            )
+            if (counterparty != null) {
+                finalitySessions.add(flowMessaging.initiateFlow(counterparty))
+            }
+        }
+        ledgerService.finalize(signedTx, finalitySessions)
+
+        // Notify SARB after finality
+        val sarbX500 = findSarbObserver(memberLookup)
+        if (sarbX500 != null) {
+            val sarbSession = flowMessaging.initiateFlow(sarbX500)
+            sarbSession.send(LifecycleNotificationDto(
+                stateId = currentState.stateId.toString(),
+                instructionId = currentState.instructionId,
+                newStatus = PaymentStatus.CANCELLATION_REQUESTED.name,
+                statusReason = input.cancellationReason,
+                updatedAt = Instant.now().toString()
+            ))
+            sarbSession.close()
+        }
 
         return jsonMarshallingService.format(Output(
             input.stateId, "CANCELLATION_REQUESTED",
             "Cancellation requested. Awaiting counterparty resolution."
         ))
     }
-
-    @Suspendable
-    private fun buildSessionList(state: PaymentInstructionState, myBranchCode: String): List<FlowSession> {
-        val sessions = mutableListOf<FlowSession>()
-        if (state.debtorAgentBranchCode != state.creditorAgentBranchCode) {
-            val counterpartyBranch = state.creditorAgentBranchCode
-            memberLookup.lookup()
-                .filter { it.memberProvidedContext["branchCode"] == counterpartyBranch }
-                .firstOrNull()?.let { sessions.add(initiateFlow(it.name)) }
-        }
-        memberLookup.lookup()
-            .filter { it.memberProvidedContext["role"] == "REGULATOR_OBSERVER" }
-            .firstOrNull()?.let { sessions.add(initiateFlow(it.name)) }
-        return sessions
-    }
 }
 
 @InitiatedBy(protocol = "request-cancellation")
 class RequestCancellationResponderFlow : ResponderFlow {
-    @CordaInject lateinit var utxoLedgerService: UtxoLedgerService
+    @CordaInject lateinit var ledgerService: UtxoLedgerService
+    @CordaInject lateinit var memberLookup: MemberLookup
+
     @Suspendable
     override fun call(session: FlowSession) {
-        utxoLedgerService.receiveFinality(session) { _ -> }
+        val myOrg = memberLookup.myInfo().name.organisation
+        if (myOrg == "SARB") {
+            val dto = session.receive(LifecycleNotificationDto::class.java)
+            return
+        }
+        ledgerService.receiveFinality(session) { _ -> }
     }
 }
 
@@ -217,11 +319,13 @@ class RequestCancellationResponderFlow : ResponderFlow {
 @InitiatingFlow(protocol = "resolve-cancellation")
 class ResolveCancellationFlow : ClientStartableFlow {
 
-    @CordaInject lateinit var utxoLedgerService: UtxoLedgerService
+    @CordaInject lateinit var ledgerService: UtxoLedgerService
     @CordaInject lateinit var memberLookup: MemberLookup
     @CordaInject lateinit var notaryLookup: NotaryLookup
     @CordaInject lateinit var jsonMarshallingService: JsonMarshallingService
     @CordaInject lateinit var persistenceService: PersistenceService
+    @CordaInject lateinit var flowEngine: FlowEngine
+    @CordaInject lateinit var flowMessaging: FlowMessaging
 
     @CordaSerializable
     data class Input(val stateId: String, val resolution: String, val reason: String? = null)
@@ -239,47 +343,78 @@ class ResolveCancellationFlow : ClientStartableFlow {
             "Resolution must be CANCELLATION_ACCEPTED or CANCELLATION_REJECTED"
         }
 
-        val stateAndRef = utxoLedgerService.findUnconsumedStatesByType(PaymentInstructionState::class.java)
-            .firstOrNull { it.state.contractState.stateId == stateId }
-            ?: throw IllegalArgumentException("State not found: $stateId")
+        val stateAndRef = ledgerService.findUnconsumedStatesByExactType(
+            PaymentInstructionState::class.java, 100, Instant.now()
+        ).results.firstOrNull { it.state.contractState.stateId == stateId }
+            ?: throw CordaRuntimeException("State not found: $stateId")
 
         val currentState = stateAndRef.state.contractState
 
         // Authorization: only the creditor bank may resolve cancellation
-        val myBranchCode = memberLookup.myInfo().memberProvidedContext["branchCode"] ?: ""
+        val myBranchCode = getBranchCode(memberLookup.myInfo().name)
         require(myBranchCode == currentState.creditorAgentBranchCode) {
             "Only the creditor bank may resolve cancellation"
         }
 
         val updatedState = currentState.withStatus(resolution, input.reason)
-        val notary = notaryLookup.notaryServices.first()
+        val notary = notaryLookup.notaryServices.single()
 
-        val txBuilder = utxoLedgerService.createTransactionBuilder()
+        val txBuilder = ledgerService.createTransactionBuilder()
             .setNotary(notary.name)
-            .setTimeWindowBetween(Instant.now(), Instant.now().plus(Duration.ofSeconds(60)))
+            .setTimeWindowBetween(
+                Instant.now(),
+                Instant.now().plusMillis(Duration.ofSeconds(60).toMillis())
+            )
             .addInputState(stateAndRef.ref)
             .addOutputState(updatedState)
             .addCommand(PaymentInstructionContract.PaymentCommand.ResolveCancellation())
             .addSignatories(updatedState.participants)
 
         val signedTx = txBuilder.toSignedTransaction()
-        val sessions = buildSessionList(currentState, myBranchCode)
-        utxoLedgerService.finalize(signedTx, sessions)
+
+        // Finality with counterparty only
+        val finalitySessions = mutableListOf<FlowSession>()
+        if (currentState.debtorAgentBranchCode != currentState.creditorAgentBranchCode) {
+            val counterparty = findMemberByBranchCode(
+                currentState.debtorAgentBranchCode, memberLookup
+            )
+            if (counterparty != null) {
+                finalitySessions.add(flowMessaging.initiateFlow(counterparty))
+            }
+        }
+        ledgerService.finalize(signedTx, finalitySessions)
+
+        // Notify SARB after finality
+        val sarbX500 = findSarbObserver(memberLookup)
+        if (sarbX500 != null) {
+            val sarbSession = flowMessaging.initiateFlow(sarbX500)
+            sarbSession.send(LifecycleNotificationDto(
+                stateId = currentState.stateId.toString(),
+                instructionId = currentState.instructionId,
+                newStatus = resolution.name,
+                statusReason = input.reason,
+                updatedAt = Instant.now().toString()
+            ))
+            sarbSession.close()
+        }
 
         // Fee reversal if cancellation accepted and fee was applicable
         var feeReversed = false
         if (resolution == PaymentStatus.CANCELLATION_ACCEPTED && currentState.feeApplicable) {
-            persistenceService.persist(FeeAccrual(
-                stateId = currentState.stateId,
-                creditorBankBranchCode = currentState.creditorAgentBranchCode,
-                feeAmount = currentState.feeAmount.negate(),
-                taxAmount = currentState.feeTaxAmount.negate(),
-                totalAmount = currentState.feeAmount.add(currentState.feeTaxAmount).negate(),
-                transactionAmount = currentState.amount,
-                accrualDate = LocalDate.now(),
-                reversed = true,
-                reversalNote = "CANCELLATION_ACCEPTED — fee reversed"
-            ))
+            persistenceService.persist(
+                "persist-fee-reversal-cancel-${currentState.stateId}",
+                FeeAccrual(
+                    stateId = currentState.stateId,
+                    creditorBankBranchCode = currentState.creditorAgentBranchCode,
+                    feeAmount = currentState.feeAmount.negate(),
+                    taxAmount = currentState.feeTaxAmount.negate(),
+                    totalAmount = currentState.feeAmount.add(currentState.feeTaxAmount).negate(),
+                    transactionAmount = currentState.amount,
+                    accrualDate = LocalDate.now(),
+                    reversed = true,
+                    reversalNote = "CANCELLATION_ACCEPTED — fee reversed"
+                )
+            )
             feeReversed = true
         }
 
@@ -288,29 +423,21 @@ class ResolveCancellationFlow : ClientStartableFlow {
             "Cancellation ${if (resolution == PaymentStatus.CANCELLATION_ACCEPTED) "accepted" else "rejected"}"
         ))
     }
-
-    @Suspendable
-    private fun buildSessionList(state: PaymentInstructionState, myBranchCode: String): List<FlowSession> {
-        val sessions = mutableListOf<FlowSession>()
-        if (state.debtorAgentBranchCode != state.creditorAgentBranchCode) {
-            val counterpartyBranch = state.debtorAgentBranchCode
-            memberLookup.lookup()
-                .filter { it.memberProvidedContext["branchCode"] == counterpartyBranch }
-                .firstOrNull()?.let { sessions.add(initiateFlow(it.name)) }
-        }
-        memberLookup.lookup()
-            .filter { it.memberProvidedContext["role"] == "REGULATOR_OBSERVER" }
-            .firstOrNull()?.let { sessions.add(initiateFlow(it.name)) }
-        return sessions
-    }
 }
 
 @InitiatedBy(protocol = "resolve-cancellation")
 class ResolveCancellationResponderFlow : ResponderFlow {
-    @CordaInject lateinit var utxoLedgerService: UtxoLedgerService
+    @CordaInject lateinit var ledgerService: UtxoLedgerService
+    @CordaInject lateinit var memberLookup: MemberLookup
+
     @Suspendable
     override fun call(session: FlowSession) {
-        utxoLedgerService.receiveFinality(session) { _ -> }
+        val myOrg = memberLookup.myInfo().name.organisation
+        if (myOrg == "SARB") {
+            val dto = session.receive(LifecycleNotificationDto::class.java)
+            return
+        }
+        ledgerService.receiveFinality(session) { _ -> }
     }
 }
 
@@ -325,11 +452,13 @@ class ResolveCancellationResponderFlow : ResponderFlow {
 @InitiatingFlow(protocol = "return-payment")
 class ReturnPaymentFlow : ClientStartableFlow {
 
-    @CordaInject lateinit var utxoLedgerService: UtxoLedgerService
+    @CordaInject lateinit var ledgerService: UtxoLedgerService
     @CordaInject lateinit var memberLookup: MemberLookup
     @CordaInject lateinit var notaryLookup: NotaryLookup
     @CordaInject lateinit var jsonMarshallingService: JsonMarshallingService
     @CordaInject lateinit var persistenceService: PersistenceService
+    @CordaInject lateinit var flowEngine: FlowEngine
+    @CordaInject lateinit var flowMessaging: FlowMessaging
 
     @CordaSerializable
     data class Input(val stateId: String, val returnReasonCode: String)
@@ -341,47 +470,78 @@ class ReturnPaymentFlow : ClientStartableFlow {
         val input = requestBody.getRequestBodyAs(jsonMarshallingService, Input::class.java)
         val stateId = UUID.fromString(input.stateId)
 
-        val stateAndRef = utxoLedgerService.findUnconsumedStatesByType(PaymentInstructionState::class.java)
-            .firstOrNull { it.state.contractState.stateId == stateId }
-            ?: throw IllegalArgumentException("State not found: $stateId")
+        val stateAndRef = ledgerService.findUnconsumedStatesByExactType(
+            PaymentInstructionState::class.java, 100, Instant.now()
+        ).results.firstOrNull { it.state.contractState.stateId == stateId }
+            ?: throw CordaRuntimeException("State not found: $stateId")
 
         val currentState = stateAndRef.state.contractState
 
         // Authorization: only the creditor bank may return a payment
-        val myBranchCode = memberLookup.myInfo().memberProvidedContext["branchCode"] ?: ""
+        val myBranchCode = getBranchCode(memberLookup.myInfo().name)
         require(myBranchCode == currentState.creditorAgentBranchCode) {
             "Only the creditor bank may return a payment"
         }
 
         val updatedState = currentState.withStatus(PaymentStatus.RETURNED, input.returnReasonCode)
-        val notary = notaryLookup.notaryServices.first()
+        val notary = notaryLookup.notaryServices.single()
 
-        val txBuilder = utxoLedgerService.createTransactionBuilder()
+        val txBuilder = ledgerService.createTransactionBuilder()
             .setNotary(notary.name)
-            .setTimeWindowBetween(Instant.now(), Instant.now().plus(Duration.ofSeconds(60)))
+            .setTimeWindowBetween(
+                Instant.now(),
+                Instant.now().plusMillis(Duration.ofSeconds(60).toMillis())
+            )
             .addInputState(stateAndRef.ref)
             .addOutputState(updatedState)
             .addCommand(PaymentInstructionContract.PaymentCommand.Return())
             .addSignatories(updatedState.participants)
 
         val signedTx = txBuilder.toSignedTransaction()
-        val sessions = buildSessionList(currentState, myBranchCode)
-        utxoLedgerService.finalize(signedTx, sessions)
+
+        // Finality with counterparty only
+        val finalitySessions = mutableListOf<FlowSession>()
+        if (currentState.debtorAgentBranchCode != currentState.creditorAgentBranchCode) {
+            val counterparty = findMemberByBranchCode(
+                currentState.debtorAgentBranchCode, memberLookup
+            )
+            if (counterparty != null) {
+                finalitySessions.add(flowMessaging.initiateFlow(counterparty))
+            }
+        }
+        ledgerService.finalize(signedTx, finalitySessions)
+
+        // Notify SARB after finality
+        val sarbX500 = findSarbObserver(memberLookup)
+        if (sarbX500 != null) {
+            val sarbSession = flowMessaging.initiateFlow(sarbX500)
+            sarbSession.send(LifecycleNotificationDto(
+                stateId = currentState.stateId.toString(),
+                instructionId = currentState.instructionId,
+                newStatus = PaymentStatus.RETURNED.name,
+                statusReason = input.returnReasonCode,
+                updatedAt = Instant.now().toString()
+            ))
+            sarbSession.close()
+        }
 
         // Fee reversal
         var feeReversed = false
         if (currentState.feeApplicable) {
-            persistenceService.persist(FeeAccrual(
-                stateId = currentState.stateId,
-                creditorBankBranchCode = currentState.creditorAgentBranchCode,
-                feeAmount = currentState.feeAmount.negate(),
-                taxAmount = currentState.feeTaxAmount.negate(),
-                totalAmount = currentState.feeAmount.add(currentState.feeTaxAmount).negate(),
-                transactionAmount = currentState.amount,
-                accrualDate = LocalDate.now(),
-                reversed = true,
-                reversalNote = "RETURNED (${input.returnReasonCode}) — fee reversed"
-            ))
+            persistenceService.persist(
+                "persist-fee-reversal-return-${currentState.stateId}",
+                FeeAccrual(
+                    stateId = currentState.stateId,
+                    creditorBankBranchCode = currentState.creditorAgentBranchCode,
+                    feeAmount = currentState.feeAmount.negate(),
+                    taxAmount = currentState.feeTaxAmount.negate(),
+                    totalAmount = currentState.feeAmount.add(currentState.feeTaxAmount).negate(),
+                    transactionAmount = currentState.amount,
+                    accrualDate = LocalDate.now(),
+                    reversed = true,
+                    reversalNote = "RETURNED (${input.returnReasonCode}) — fee reversed"
+                )
+            )
             feeReversed = true
         }
 
@@ -390,29 +550,21 @@ class ReturnPaymentFlow : ClientStartableFlow {
             "Payment returned with reason ${input.returnReasonCode}"
         ))
     }
-
-    @Suspendable
-    private fun buildSessionList(state: PaymentInstructionState, myBranchCode: String): List<FlowSession> {
-        val sessions = mutableListOf<FlowSession>()
-        if (state.debtorAgentBranchCode != state.creditorAgentBranchCode) {
-            val counterpartyBranch = state.debtorAgentBranchCode
-            memberLookup.lookup()
-                .filter { it.memberProvidedContext["branchCode"] == counterpartyBranch }
-                .firstOrNull()?.let { sessions.add(initiateFlow(it.name)) }
-        }
-        memberLookup.lookup()
-            .filter { it.memberProvidedContext["role"] == "REGULATOR_OBSERVER" }
-            .firstOrNull()?.let { sessions.add(initiateFlow(it.name)) }
-        return sessions
-    }
 }
 
 @InitiatedBy(protocol = "return-payment")
 class ReturnPaymentResponderFlow : ResponderFlow {
-    @CordaInject lateinit var utxoLedgerService: UtxoLedgerService
+    @CordaInject lateinit var ledgerService: UtxoLedgerService
+    @CordaInject lateinit var memberLookup: MemberLookup
+
     @Suspendable
     override fun call(session: FlowSession) {
-        utxoLedgerService.receiveFinality(session) { _ -> }
+        val myOrg = memberLookup.myInfo().name.organisation
+        if (myOrg == "SARB") {
+            val dto = session.receive(LifecycleNotificationDto::class.java)
+            return
+        }
+        ledgerService.receiveFinality(session) { _ -> }
     }
 }
 
@@ -422,7 +574,7 @@ class ReturnPaymentResponderFlow : ResponderFlow {
 
 class QueryPaymentInstructionsFlow : ClientStartableFlow {
 
-    @CordaInject lateinit var utxoLedgerService: UtxoLedgerService
+    @CordaInject lateinit var ledgerService: UtxoLedgerService
     @CordaInject lateinit var jsonMarshallingService: JsonMarshallingService
 
     @CordaSerializable
@@ -437,11 +589,10 @@ class QueryPaymentInstructionsFlow : ClientStartableFlow {
     override fun call(requestBody: ClientRequestBody): String {
         val input = requestBody.getRequestBodyAs(jsonMarshallingService, Input::class.java)
 
-        // NOTE: Uses in-memory filtering for pilot. For production,
-        // implement vault-named queries with ContractStateVaultJsonFactory.
-        var results = utxoLedgerService
-            .findUnconsumedStatesByType(PaymentInstructionState::class.java)
-            .map { it.state.contractState }
+        // Uses findUnconsumedStatesByExactType per Corda 5.2 API
+        var results = ledgerService.findUnconsumedStatesByExactType(
+            PaymentInstructionState::class.java, 500, Instant.now()
+        ).results.map { it.state.contractState }
 
         if (input.status != null) {
             results = results.filter { it.status == PaymentStatus.valueOf(input.status) }
@@ -471,7 +622,7 @@ class QueryPaymentInstructionsFlow : ClientStartableFlow {
 
 class GenerateSettlementReportFlow : ClientStartableFlow {
 
-    @CordaInject lateinit var utxoLedgerService: UtxoLedgerService
+    @CordaInject lateinit var ledgerService: UtxoLedgerService
     @CordaInject lateinit var memberLookup: MemberLookup
     @CordaInject lateinit var jsonMarshallingService: JsonMarshallingService
     @CordaInject lateinit var persistenceService: PersistenceService
@@ -503,14 +654,11 @@ class GenerateSettlementReportFlow : ClientStartableFlow {
         val input = requestBody.getRequestBodyAs(jsonMarshallingService, Input::class.java)
         val windowStart = LocalDate.parse(input.windowStart)
         val windowEnd = LocalDate.parse(input.windowEnd)
-        val myBranchCode = memberLookup.myInfo().memberProvidedContext["branchCode"] ?: ""
+        val myBranchCode = getBranchCode(memberLookup.myInfo().name)
 
-        // NOTE: Queries unconsumed CLEARED states. Returned/cancelled states
-        // are already consumed (their CLEARED version no longer exists in the
-        // unconsumed set), so they are correctly excluded from settlement.
-        val clearedStates = utxoLedgerService
-            .findUnconsumedStatesByType(PaymentInstructionState::class.java)
-            .map { it.state.contractState }
+        val clearedStates = ledgerService.findUnconsumedStatesByExactType(
+            PaymentInstructionState::class.java, 500, Instant.now()
+        ).results.map { it.state.contractState }
             .filter { it.status == PaymentStatus.CLEARED }
             .filter { it.settlementDate in windowStart..windowEnd }
 
@@ -547,8 +695,13 @@ class GenerateSettlementReportFlow : ClientStartableFlow {
             )
         }
 
+        // Deterministic reportId from flow parameters — retries produce the same ID
+        val reportId = UUID.nameUUIDFromBytes(
+            "${myBranchCode}-${windowStart}-${windowEnd}".toByteArray(Charsets.UTF_8)
+        ).toString()
+
         val report = SettlementReportOutput(
-            reportId = UUID.randomUUID().toString(),
+            reportId = reportId,
             windowStart = windowStart.toString(),
             windowEnd = windowEnd.toString(),
             thisBankBranchCode = myBranchCode,
@@ -557,15 +710,18 @@ class GenerateSettlementReportFlow : ClientStartableFlow {
         )
 
         // Persist settlement report off-ledger
-        persistenceService.persist(SettlementReport(
-            bankBranchCode = myBranchCode,
-            windowStart = windowStart.atStartOfDay().toInstant(java.time.ZoneOffset.UTC),
-            windowEnd = windowEnd.atStartOfDay().toInstant(java.time.ZoneOffset.UTC),
-            netAmount = positions.sumOf { it.netAmount },
-            grossPayable = positions.sumOf { it.grossPayable },
-            grossReceivable = positions.sumOf { it.grossReceivable },
-            transactionCount = clearedStates.size,
-        ))
+        persistenceService.persist(
+            "persist-settlement-report-$reportId",
+            SettlementReport(
+                bankBranchCode = myBranchCode,
+                windowStart = windowStart.atStartOfDay().toInstant(java.time.ZoneOffset.UTC),
+                windowEnd = windowEnd.atStartOfDay().toInstant(java.time.ZoneOffset.UTC),
+                netAmount = positions.sumOf { it.netAmount },
+                grossPayable = positions.sumOf { it.grossPayable },
+                grossReceivable = positions.sumOf { it.grossReceivable },
+                transactionCount = clearedStates.size
+            )
+        )
 
         return jsonMarshallingService.format(report)
     }
@@ -601,17 +757,16 @@ class GenerateFeeReportFlow : ClientStartableFlow {
     @Suspendable
     override fun call(requestBody: ClientRequestBody): String {
         val input = requestBody.getRequestBodyAs(jsonMarshallingService, Input::class.java)
-        val myBranchCode = memberLookup.myInfo().memberProvidedContext["branchCode"] ?: ""
+        val myBranchCode = getBranchCode(memberLookup.myInfo().name)
+        val periodStart = LocalDate.parse(input.periodStart)
+        val periodEnd = LocalDate.parse(input.periodEnd)
 
         // Query off-ledger fee_accruals for this bank in the period
-        // This includes reversals (negative amounts) — report shows net
         val accruals = persistenceService.findAll(FeeAccrual::class.java)
+            .execute()
+            .results
             .filter { it.creditorBankBranchCode == myBranchCode }
-            .filter {
-                val periodStart = LocalDate.parse(input.periodStart)
-                val periodEnd = LocalDate.parse(input.periodEnd)
-                it.accrualDate in periodStart..periodEnd
-            }
+            .filter { it.accrualDate in periodStart..periodEnd }
 
         val totalFees = accruals.sumOf { it.feeAmount }
         val totalTax = accruals.sumOf { it.taxAmount }
@@ -619,7 +774,10 @@ class GenerateFeeReportFlow : ClientStartableFlow {
         val eligibleCount = accruals.count { !it.reversed }
 
         return jsonMarshallingService.format(FeeReportOutput(
-            reportId = UUID.randomUUID().toString(),
+            // Deterministic reportId from flow parameters
+            reportId = UUID.nameUUIDFromBytes(
+                "${myBranchCode}-${input.periodStart}-${input.periodEnd}".toByteArray(Charsets.UTF_8)
+            ).toString(),
             periodStart = input.periodStart,
             periodEnd = input.periodEnd,
             bankBranchCode = myBranchCode,
@@ -640,30 +798,10 @@ class GenerateFeeReportFlow : ClientStartableFlow {
 /**
  * Suspends a participant. Caller must be System Operator.
  *
- * PARTICIPANT SUSPENSION — SOURCE OF TRUTH HIERARCHY:
- *
- * 1. AUTHORITATIVE: MGM metadata (participantStatus field).
- *    All flows check this via getMemberStatus(). This is what actually
- *    blocks transactions. Updated via Corda 5 REST Admin API — NOT from
- *    within a flow. Flows cannot mutate network-level metadata.
- *
- * 2. LAYER 1 (IMMEDIATE): API credential revocation.
- *    Performed by System Operator outside the Corda network.
- *    Prevents the suspended bank from calling any REST endpoint.
- *
- * 3. AUDIT TRAIL: Off-ledger participant_status table.
- *    This flow records the suspension event for audit/compliance history.
- *    This table is NOT consulted for enforcement — it is history only.
- *
- * OPERATIONAL PROCEDURE:
- * 1. SO calls this flow → records audit trail
- * 2. SO calls Corda 5 REST Admin API → updates MGM participantStatus = SUSPENDED
- * 3. SO revokes API credentials for the bank (Layer 1)
- * 4. All subsequent flow invocations check MGM metadata and reject if SUSPENDED
- *
- * The Layer 2 vault race-condition guard (vault query for duplicate instructionIds)
- * is deferred for pilot. The off-ledger idempotency table with unique constraint
- * provides sufficient protection. Vault-level checking is a production hardening item.
+ * NOTE: In static network mode, there is no System Operator virtual node.
+ * These flows are retained for completeness but cannot be invoked in
+ * the static network pilot. In production with MGM, the System Operator
+ * node would call the Corda 5 REST Admin API to update MGM metadata.
  */
 class SuspendParticipantFlow : ClientStartableFlow {
 
@@ -672,7 +810,7 @@ class SuspendParticipantFlow : ClientStartableFlow {
     @CordaInject lateinit var persistenceService: PersistenceService
 
     @CordaSerializable
-    data class Input(val branchCode: String, val reason: String)
+    data class Input(val branchCode: String, val reason: String, val clientRequestId: String)
     @CordaSerializable
     data class Output(val branchCode: String, val status: String, val message: String)
 
@@ -680,23 +818,22 @@ class SuspendParticipantFlow : ClientStartableFlow {
     override fun call(requestBody: ClientRequestBody): String {
         val input = requestBody.getRequestBodyAs(jsonMarshallingService, Input::class.java)
 
-        val myRole = memberLookup.myInfo().memberProvidedContext["role"] ?: ""
+        val myRole = getRole(memberLookup.myInfo().name)
         require(myRole == "SYSTEM_OPERATOR") {
             "Only the System Operator can suspend participants"
         }
 
-        // NOTE: MGM metadata update mechanism depends on Corda 5.2 API.
-        // The developer must implement this using the MGM REST API or
-        // the MemberLookup service's metadata update capability.
-        // For now, record the audit trail off-ledger.
-
-        persistenceService.persist(ParticipantStatusRecord(
-            branchCode = input.branchCode,
-            status = "SUSPENDED",
-            effectiveFrom = Instant.now(),
-            reason = input.reason,
-            initiatedBy = memberLookup.myInfo().name.toString()
-        ))
+        // Deterministic dedup ID from client-provided request ID
+        persistenceService.persist(
+            "persist-suspend-${input.branchCode}-${input.clientRequestId}",
+            ParticipantStatusRecord(
+                branchCode = input.branchCode,
+                status = "SUSPENDED",
+                effectiveFrom = Instant.now(),
+                reason = input.reason,
+                initiatedBy = memberLookup.myInfo().name.toString()
+            )
+        )
 
         return jsonMarshallingService.format(Output(
             input.branchCode, "SUSPENDED",
@@ -713,7 +850,7 @@ class ReinstateParticipantFlow : ClientStartableFlow {
     @CordaInject lateinit var persistenceService: PersistenceService
 
     @CordaSerializable
-    data class Input(val branchCode: String)
+    data class Input(val branchCode: String, val clientRequestId: String)
     @CordaSerializable
     data class Output(val branchCode: String, val status: String, val message: String)
 
@@ -721,18 +858,22 @@ class ReinstateParticipantFlow : ClientStartableFlow {
     override fun call(requestBody: ClientRequestBody): String {
         val input = requestBody.getRequestBodyAs(jsonMarshallingService, Input::class.java)
 
-        val myRole = memberLookup.myInfo().memberProvidedContext["role"] ?: ""
+        val myRole = getRole(memberLookup.myInfo().name)
         require(myRole == "SYSTEM_OPERATOR") {
             "Only the System Operator can reinstate participants"
         }
 
-        persistenceService.persist(ParticipantStatusRecord(
-            branchCode = input.branchCode,
-            status = "ACTIVE",
-            effectiveFrom = Instant.now(),
-            reason = "Reinstated",
-            initiatedBy = memberLookup.myInfo().name.toString()
-        ))
+        // Deterministic dedup ID from client-provided request ID
+        persistenceService.persist(
+            "persist-reinstate-${input.branchCode}-${input.clientRequestId}",
+            ParticipantStatusRecord(
+                branchCode = input.branchCode,
+                status = "ACTIVE",
+                effectiveFrom = Instant.now(),
+                reason = "Reinstated",
+                initiatedBy = memberLookup.myInfo().name.toString()
+            )
+        )
 
         return jsonMarshallingService.format(Output(
             input.branchCode, "ACTIVE",

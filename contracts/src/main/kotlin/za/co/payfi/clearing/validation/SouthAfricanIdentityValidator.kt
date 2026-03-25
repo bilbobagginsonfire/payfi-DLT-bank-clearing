@@ -84,3 +84,4 @@ object SouthAfricanIdentityValidator {
         return code.length == 6 && code.all { it.isDigit() }
     }
 }
+

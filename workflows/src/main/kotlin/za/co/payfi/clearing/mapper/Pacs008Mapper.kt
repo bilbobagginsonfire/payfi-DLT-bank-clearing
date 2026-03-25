@@ -12,17 +12,17 @@ import java.time.LocalDate
 import java.util.UUID
 
 /**
- * Maps between ISO 20022 pacs.008 XML and PaymentInstructionState.
+ * Maps between ISO 20022 pacs.008.001.08 XML and PaymentInstructionState.
  *
  * Handles batch messages: a single pacs.008 can contain multiple CdtTrfTxInf
  * blocks. Each block becomes a separate PaymentInstructionState on the ledger.
  *
- * Uses Prowide pw-iso20022 (open source) for XML parsing and generation.
- * NOT pw-swift-core (that is for MT messages only).
+ * Uses Prowide pw-iso20022 SRU2023-9.4.7 (open source) for XML parsing.
  *
- * NOTE: Prowide class names are version-specific. A developer MUST verify
- * all class names (MxPacs00800108, CreditTransferTransaction39, GroupHeader93,
- * etc.) against the actual pw-iso20022 JAR for the target SRU version.
+ * IMPORTANT: Prowide dictionary objects use builder-pattern setters that return
+ * `this`. In Kotlin, some setters may NOT be recognized as property setters.
+ * When `obj.field = value` produces "Variable expected", use the explicit
+ * Java setter form `obj.setField(value)` instead.
  */
 class Pacs008Mapper {
 
@@ -70,8 +70,9 @@ class Pacs008Mapper {
 
         // Group Header — including mandatory CreDtTm
         val grpHdr = GroupHeader93()
-        grpHdr.msgId = "MSG-${state.stateId}"
-        grpHdr.nbOfTxs = "1"
+        // Use explicit Java setter in case builder pattern causes "Variable expected"
+        grpHdr.setMsgId("MSG-${state.stateId}")
+        grpHdr.setNbOfTxs("1")
 
         // CreDtTm is MANDATORY per ISO 20022 schema
         val factory = javax.xml.datatype.DatatypeFactory.newInstance()
@@ -94,15 +95,15 @@ class Pacs008Mapper {
 
         // Payment Identification
         val pmtId = PaymentIdentification7()
-        pmtId.instrId = state.instructionId
-        pmtId.endToEndId = state.endToEndId
-        pmtId.txId = state.transactionId
+        pmtId.setInstrId(state.instructionId)
+        pmtId.setEndToEndId(state.endToEndId)
+        pmtId.setTxId(state.transactionId)
         txInf.pmtId = pmtId
 
         // Amount
         val amt = ActiveCurrencyAndAmount()
         amt.value = state.amount
-        amt.ccy = state.currency
+        amt.setCcy(state.currency)
         txInf.intrBkSttlmAmt = amt
 
         // Settlement Date
@@ -110,17 +111,19 @@ class Pacs008Mapper {
 
         // Debtor
         val dbtr = PartyIdentification135()
-        dbtr.nm = state.debtorName
+        dbtr.setNm(state.debtorName)
         txInf.dbtr = dbtr
         setDebtorId(dbtr, state.debtorIdType, state.debtorIdNumber)
 
-        if (state.debtorAddress != null) {
+        // Debtor Address — use explicit local variable to avoid smart cast across modules
+        val addr = state.debtorAddress
+        if (addr != null) {
             val pstlAdr = PostalAddress24()
-            pstlAdr.strtNm = state.debtorAddress.streetName
-            pstlAdr.bldgNb = state.debtorAddress.buildingNumber
-            pstlAdr.pstCd = state.debtorAddress.postCode
-            pstlAdr.twnNm = state.debtorAddress.townName
-            pstlAdr.ctry = state.debtorAddress.country
+            pstlAdr.setStrtNm(addr.streetName)
+            pstlAdr.setBldgNb(addr.buildingNumber)
+            pstlAdr.setPstCd(addr.postCode)
+            pstlAdr.setTwnNm(addr.townName)
+            pstlAdr.setCtry(addr.country)
             dbtr.pstlAdr = pstlAdr
         }
 
@@ -128,7 +131,7 @@ class Pacs008Mapper {
         val dbtrAcct = CashAccount38()
         val dbtrAcctId = AccountIdentification4Choice()
         val dbtrOthr = GenericAccountIdentification1()
-        dbtrOthr.id = state.debtorAccount
+        dbtrOthr.setId(state.debtorAccount)
         dbtrAcctId.othr = dbtrOthr
         dbtrAcct.id = dbtrAcctId
         txInf.dbtrAcct = dbtrAcct
@@ -137,21 +140,21 @@ class Pacs008Mapper {
         val dbtrAgt = BranchAndFinancialInstitutionIdentification6()
         val dbtrFinInstn = FinancialInstitutionIdentification18()
         val dbtrClrSys = ClearingSystemMemberIdentification2()
-        dbtrClrSys.mmbId = state.debtorAgentBranchCode
+        dbtrClrSys.setMmbId(state.debtorAgentBranchCode)
         dbtrFinInstn.clrSysMmbId = dbtrClrSys
         dbtrAgt.finInstnId = dbtrFinInstn
         txInf.dbtrAgt = dbtrAgt
 
         // Creditor
         val cdtr = PartyIdentification135()
-        cdtr.nm = state.creditorName
+        cdtr.setNm(state.creditorName)
         txInf.cdtr = cdtr
 
         // Creditor Account
         val cdtrAcct = CashAccount38()
         val cdtrAcctId = AccountIdentification4Choice()
         val cdtrOthr = GenericAccountIdentification1()
-        cdtrOthr.id = state.creditorAccount
+        cdtrOthr.setId(state.creditorAccount)
         cdtrAcctId.othr = cdtrOthr
         cdtrAcct.id = cdtrAcctId
         txInf.cdtrAcct = cdtrAcct
@@ -160,7 +163,7 @@ class Pacs008Mapper {
         val cdtrAgt = BranchAndFinancialInstitutionIdentification6()
         val cdtrFinInstn = FinancialInstitutionIdentification18()
         val cdtrClrSys = ClearingSystemMemberIdentification2()
-        cdtrClrSys.mmbId = state.creditorAgentBranchCode
+        cdtrClrSys.setMmbId(state.creditorAgentBranchCode)
         cdtrFinInstn.clrSysMmbId = cdtrClrSys
         cdtrAgt.finInstnId = cdtrFinInstn
         txInf.cdtrAgt = cdtrAgt
@@ -196,14 +199,18 @@ class Pacs008Mapper {
         val dbtr = txInf.dbtr
         val (debtorIdType, debtorIdNumber) = extractDebtorId(dbtr)
 
-        val debtorAddress = dbtr?.pstlAdr?.let { addr ->
+        // Use local variable for debtorAddress to avoid smart cast across modules (Issue 11)
+        val debtorPstlAdr = dbtr?.pstlAdr
+        val debtorAddress = if (debtorPstlAdr != null) {
             StructuredAddress(
-                streetName = addr.strtNm,
-                buildingNumber = addr.bldgNb,
-                postCode = addr.pstCd,
-                townName = addr.twnNm,
-                country = addr.ctry
+                streetName = debtorPstlAdr.strtNm,
+                buildingNumber = debtorPstlAdr.bldgNb,
+                postCode = debtorPstlAdr.pstCd,
+                townName = debtorPstlAdr.twnNm,
+                country = debtorPstlAdr.ctry
             )
+        } else {
+            null
         }
 
         val creditorAgentBranchCode = txInf.cdtrAgt?.finInstnId?.clrSysMmbId?.mmbId ?: ""
@@ -214,7 +221,12 @@ class Pacs008Mapper {
         val feeTaxAmount = if (feeApplicable) PilotFeeConstants.TAX_AMOUNT else BigDecimal.ZERO
 
         return PaymentInstructionState(
-            stateId = UUID.randomUUID(),
+            // Deterministic stateId derived from unique business keys.
+            // On flow retry, the mapper regenerates the same stateId, ensuring
+            // downstream persist() dedup IDs remain stable.
+            stateId = UUID.nameUUIDFromBytes(
+                "${pmtId.instrId}-${pmtId.txId}".toByteArray(Charsets.UTF_8)
+            ),
             instructionId = pmtId.instrId ?: "",
             endToEndId = pmtId.endToEndId ?: "",
             transactionId = pmtId.txId ?: "",
@@ -275,14 +287,14 @@ class Pacs008Mapper {
             DebtorIdType.SA_NATIONAL_ID, DebtorIdType.PASSPORT, DebtorIdType.UNIQUE_CUSTOMER_ID -> {
                 val prvtId = PersonIdentification13()
                 val othr = GenericPersonIdentification1()
-                othr.id = idNumber
+                othr.setId(idNumber)
                 val schmeNm = PersonIdentificationSchemeName1Choice()
-                schmeNm.cd = when (idType) {
+                schmeNm.setCd(when (idType) {
                     DebtorIdType.SA_NATIONAL_ID -> "NIDN"
                     DebtorIdType.PASSPORT -> "CCPT"
                     DebtorIdType.UNIQUE_CUSTOMER_ID -> "CUST"
                     else -> "NIDN"
-                }
+                })
                 othr.schmeNm = schmeNm
                 prvtId.addOthr(othr)
                 partyId.prvtId = prvtId
@@ -290,7 +302,7 @@ class Pacs008Mapper {
             DebtorIdType.BUSINESS_REGISTRATION_ID -> {
                 val orgId = OrganisationIdentification29()
                 val othr = GenericOrganisationIdentification1()
-                othr.id = idNumber
+                othr.setId(idNumber)
                 orgId.addOthr(othr)
                 partyId.orgId = orgId
             }

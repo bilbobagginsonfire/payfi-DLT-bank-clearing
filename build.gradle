@@ -1,0 +1,61 @@
+plugins {
+    id 'org.jetbrains.kotlin.jvm' apply false
+    id 'org.jetbrains.kotlin.plugin.jpa' apply false
+    id 'org.jetbrains.kotlin.plugin.allopen' apply false
+    id 'net.corda.plugins.cordapp-cpk2' apply false
+    id 'net.corda.plugins.cordapp-cpb2' apply false
+    id 'net.corda.cordapp.cordapp-configuration' apply false
+    id 'net.corda.gradle.plugin'
+}
+
+allprojects {
+    group = 'za.co.payfi.clearing'
+    version = '1.0-SNAPSHOT'
+    repositories {
+        mavenCentral()
+        mavenLocal()
+    }
+}
+
+subprojects {
+    apply plugin: 'org.jetbrains.kotlin.jvm'
+
+    tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+        kotlinOptions {
+            languageVersion = '1.7'
+            apiVersion = '1.7'
+            jvmTarget = '17'
+            freeCompilerArgs += ["-Xjvm-default=all"]
+            allWarningsAsErrors = false
+        }
+    }
+
+    tasks.withType(Test).configureEach {
+        useJUnitPlatform()
+    }
+
+    dependencies {
+        testImplementation "org.junit.jupiter:junit-jupiter:5.10.1"
+        testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:5.10.1"
+    }
+}
+
+cordaRuntimeGradlePlugin {
+    notaryVersion = cordaNotaryPluginsVersion
+    notaryCpiName = "NotaryServer"
+    corDappCpiName = "MyCorDapp"
+    cpiUploadTimeout = "30000"
+    vnodeRegistrationTimeout = "60000"
+    cordaProcessorTimeout = "300000"
+    workflowsModuleName = "workflows"
+    cordaClusterURL = "https://localhost:8888"
+    cordaRestUser = "admin"
+    cordaRestPasswd = "admin"
+    composeFilePath = "config/combined-worker-compose.yaml"
+    networkConfigFile = "config/static-network-config.json"
+    r3RootCertFile = "config/r3-ca-key.pem"
+    skipTestsDuringBuildCpis = "false"
+    cordaRuntimePluginWorkspaceDir = "workspace"
+    cordaBinDir = "${System.getProperty("user.home")}/.corda/corda5"
+    cordaCliBinDir = "${System.getProperty("user.home")}/.corda/cli"
+}

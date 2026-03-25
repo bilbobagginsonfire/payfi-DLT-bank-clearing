@@ -6,6 +6,18 @@ import java.time.LocalDate
 import java.util.UUID
 import javax.persistence.*
 
+/**
+ * Off-ledger persistence entities for PayFi.
+ *
+ * NOTE: In the Corda 5.2 template, JPA entities are used with the
+ * PersistenceService API. The persist() method requires a deterministic
+ * deduplication ID as its first argument:
+ *   persistenceService.persist("dedup-id-string", entity)
+ *
+ * All callers of persistenceService.persist() must provide a business-key-based
+ * dedup ID (e.g., "persist-${msgId}-${instrId}"), NEVER UUID.randomUUID().
+ */
+
 @Entity
 @Table(name = "payment_message_metadata")
 data class PaymentMessageMetadata(

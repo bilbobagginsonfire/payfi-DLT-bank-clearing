@@ -57,3 +57,4 @@ class SouthAfricanIdentityValidatorTest {
         @Test fun `invalid empty`() { assertFalse(SouthAfricanIdentityValidator.isValidBranchCode("")) }
     }
 }
+
