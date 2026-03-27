@@ -354,13 +354,13 @@ class SubmitPaymentInstructionFlow : ClientStartableFlow {
      * Demo-only workaround: derive branch code from X500 organisation name.
      * In production, this would come from MGM-provided member metadata.
      */
-    private fun getBranchCode(memberName: MemberX500Name): String = when (memberName.organisation) {
+    private fun getBranchCode(memberName: MemberX500Name): String = when (memberName.organization) {
         "BankAlpha" -> "100001"
         "BankBeta" -> "200002"
-        else -> throw CordaRuntimeException("Unknown bank: ${memberName.organisation}")
+        else -> throw CordaRuntimeException("Unknown bank: ${memberName.organization}")
     }
 
-    private fun getRole(memberName: MemberX500Name): String = when (memberName.organisation) {
+    private fun getRole(memberName: MemberX500Name): String = when (memberName.organization) {
         "BankAlpha", "BankBeta" -> "PARTICIPANT"
         "SARB" -> "REGULATOR_OBSERVER"
         else -> "UNKNOWN"
@@ -373,12 +373,12 @@ class SubmitPaymentInstructionFlow : ClientStartableFlow {
             "200002" -> "BankBeta"
             else -> return null
         }
-        return memberLookup.lookup().firstOrNull { it.name.organisation == targetOrg }?.name
+        return memberLookup.lookup().firstOrNull { it.name.organization == targetOrg }?.name
     }
 
     @Suspendable
     private fun findSarbObserver(): MemberX500Name? {
-        return memberLookup.lookup().firstOrNull { it.name.organisation == "SARB" }?.name
+        return memberLookup.lookup().firstOrNull { it.name.organization == "SARB" }?.name
     }
 }
 
@@ -394,7 +394,7 @@ class PaymentInstructionResponderFlow : ResponderFlow {
 
     @Suspendable
     override fun call(session: FlowSession) {
-        val myOrg = memberLookup.myInfo().name.organisation
+        val myOrg = memberLookup.myInfo().name.organization
 
         if (myOrg == "SARB") {
             // SARB observer: receive the DTO notification (not finality)
