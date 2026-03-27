@@ -32,13 +32,13 @@ import java.util.UUID
  * (memberProvidedContext). memberProvidedContext is NOT available in
  * static network config.
  */
-internal fun getBranchCode(memberName: MemberX500Name): String = when (memberName.organisation) {
+internal fun getBranchCode(memberName: MemberX500Name): String = when (memberName.organization) {
     "BankAlpha" -> "100001"
     "BankBeta" -> "200002"
-    else -> throw CordaRuntimeException("Unknown bank: ${memberName.organisation}")
+    else -> throw CordaRuntimeException("Unknown bank: ${memberName.organization}")
 }
 
-internal fun getRole(memberName: MemberX500Name): String = when (memberName.organisation) {
+internal fun getRole(memberName: MemberX500Name): String = when (memberName.organization) {
     "BankAlpha", "BankBeta" -> "PARTICIPANT"
     "SARB" -> "REGULATOR_OBSERVER"
     else -> "UNKNOWN"
@@ -53,11 +53,11 @@ internal fun findMemberByBranchCode(
         "200002" -> "BankBeta"
         else -> return null
     }
-    return memberLookup.lookup().firstOrNull { it.name.organisation == targetOrg }?.name
+    return memberLookup.lookup().firstOrNull { it.name.organization == targetOrg }?.name
 }
 
 internal fun findSarbObserver(memberLookup: MemberLookup): MemberX500Name? {
-    return memberLookup.lookup().firstOrNull { it.name.organisation == "SARB" }?.name
+    return memberLookup.lookup().firstOrNull { it.name.organization == "SARB" }?.name
 }
 
 /**
@@ -192,7 +192,7 @@ class UpdatePaymentStatusResponderFlow : ResponderFlow {
 
     @Suspendable
     override fun call(session: FlowSession) {
-        val myOrg = memberLookup.myInfo().name.organisation
+        val myOrg = memberLookup.myInfo().name.organization
         if (myOrg == "SARB") {
             val dto = session.receive(LifecycleNotificationDto::class.java)
             return
@@ -299,7 +299,7 @@ class RequestCancellationResponderFlow : ResponderFlow {
 
     @Suspendable
     override fun call(session: FlowSession) {
-        val myOrg = memberLookup.myInfo().name.organisation
+        val myOrg = memberLookup.myInfo().name.organization
         if (myOrg == "SARB") {
             val dto = session.receive(LifecycleNotificationDto::class.java)
             return
@@ -432,7 +432,7 @@ class ResolveCancellationResponderFlow : ResponderFlow {
 
     @Suspendable
     override fun call(session: FlowSession) {
-        val myOrg = memberLookup.myInfo().name.organisation
+        val myOrg = memberLookup.myInfo().name.organization
         if (myOrg == "SARB") {
             val dto = session.receive(LifecycleNotificationDto::class.java)
             return
@@ -559,7 +559,7 @@ class ReturnPaymentResponderFlow : ResponderFlow {
 
     @Suspendable
     override fun call(session: FlowSession) {
-        val myOrg = memberLookup.myInfo().name.organisation
+        val myOrg = memberLookup.myInfo().name.organization
         if (myOrg == "SARB") {
             val dto = session.receive(LifecycleNotificationDto::class.java)
             return
