@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+    <FIToFICstmrCdtTrf>
+        <GrpHdr>
+            <MsgId>MSG-TEST-BATCH-001</MsgId>
+            <CreDtTm>2026-03-22T10:10:00</CreDtTm>
+            <NbOfTxs>3</NbOfTxs>
+            <SttlmInf>
+                <SttlmMtd>CLRG</SttlmMtd>
+            </SttlmInf>
+        </GrpHdr>
+        <!-- Transaction 1: R15,000 (fee applies) -->
+        <CdtTrfTxInf>
+            <PmtId>
+                <InstrId>BATCH-INSTR-001</InstrId>
+                <EndToEndId>BATCH-E2E-001</EndToEndId>
+                <TxId>BATCH-TX-001</TxId>
+            </PmtId>
+            <IntrBkSttlmAmt Ccy="ZAR">15000.00</IntrBkSttlmAmt>
+            <IntrBkSttlmDt>2026-03-22</IntrBkSttlmDt>
+            <Dbtr>
+                <Nm>Payroll Services (Pty) Ltd</Nm>
+                <Id>
+                    <OrgId>
+                        <Othr>
+                            <Id>2015/123456/07</Id>
+                        </Othr>
+                    </OrgId>
+                </Id>
+            </Dbtr>
+            <DbtrAcct><Id><Othr><Id>62555666777</Id></Othr></Id></DbtrAcct>
+            <DbtrAgt><FinInstnId><ClrSysMmbId><MmbId>100001</MmbId></ClrSysMmbId></FinInstnId></DbtrAgt>
+            <Cdtr><Nm>Employee One</Nm></Cdtr>
+            <CdtrAcct><Id><Othr><Id>40888999000</Id></Othr></Id></CdtrAcct>
+            <CdtrAgt><FinInstnId><ClrSysMmbId><MmbId>200002</MmbId></ClrSysMmbId></FinInstnId></CdtrAgt>
+            <RmtInf><Ustrd>Salary March 2026</Ustrd></RmtInf>
+        </CdtTrfTxInf>
+        <!-- Transaction 2: R2,500 (no fee — below threshold) -->
+        <CdtTrfTxInf>
+            <PmtId>
+                <InstrId>BATCH-INSTR-002</InstrId>
+                <EndToEndId>BATCH-E2E-002</EndToEndId>
+                <TxId>BATCH-TX-002</TxId>
+            </PmtId>
+            <IntrBkSttlmAmt Ccy="ZAR">2500.00</IntrBkSttlmAmt>
+            <IntrBkSttlmDt>2026-03-22</IntrBkSttlmDt>
+            <Dbtr>
+                <Nm>Payroll Services (Pty) Ltd</Nm>
+                <Id>
+                    <OrgId>
+                        <Othr>
+                            <Id>2015/123456/07</Id>
+                        </Othr>
+                    </OrgId>
+                </Id>
+            </Dbtr>
+            <DbtrAcct><Id><Othr><Id>62555666777</Id></Othr></Id></DbtrAcct>
+            <DbtrAgt><FinInstnId><ClrSysMmbId><MmbId>100001</MmbId></ClrSysMmbId></FinInstnId></DbtrAgt>
+            <Cdtr><Nm>Employee Two</Nm></Cdtr>
+            <CdtrAcct><Id><Othr><Id>40111222333</Id></Othr></Id></CdtrAcct>
+            <CdtrAgt><FinInstnId><ClrSysMmbId><MmbId>300003</MmbId></ClrSysMmbId></FinInstnId></CdtrAgt>
+            <RmtInf><Ustrd>Salary March 2026</Ustrd></RmtInf>
+        </CdtTrfTxInf>
+        <!-- Transaction 3: R8,200 (fee applies) -->
+        <CdtTrfTxInf>
+            <PmtId>
+                <InstrId>BATCH-INSTR-003</InstrId>
+                <EndToEndId>BATCH-E2E-003</EndToEndId>
+                <TxId>BATCH-TX-003</TxId>
+            </PmtId>
+            <IntrBkSttlmAmt Ccy="ZAR">8200.00</IntrBkSttlmAmt>
+            <IntrBkSttlmDt>2026-03-22</IntrBkSttlmDt>
+            <Dbtr>
+                <Nm>Payroll Services (Pty) Ltd</Nm>
+                <Id>
+                    <OrgId>
+                        <Othr>
+                            <Id>2015/123456/07</Id>
+                        </Othr>
+                    </OrgId>
+                </Id>
+            </Dbtr>
+            <DbtrAcct><Id><Othr><Id>62555666777</Id></Othr></Id></DbtrAcct>
+            <DbtrAgt><FinInstnId><ClrSysMmbId><MmbId>100001</MmbId></ClrSysMmbId></FinInstnId></DbtrAgt>
+            <Cdtr><Nm>Employee Three</Nm></Cdtr>
+            <CdtrAcct><Id><Othr><Id>40444555666</Id></Othr></Id></CdtrAcct>
+            <CdtrAgt><FinInstnId><ClrSysMmbId><MmbId>200002</MmbId></ClrSysMmbId></FinInstnId></CdtrAgt>
+            <RmtInf><Ustrd>Salary March 2026</Ustrd></RmtInf>
+        </CdtTrfTxInf>
+    </FIToFICstmrCdtTrf>
+</Document>
+

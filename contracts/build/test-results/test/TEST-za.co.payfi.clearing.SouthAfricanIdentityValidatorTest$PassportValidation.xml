@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$PassportValidation" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-03-30T09:21:38" hostname="payfi-demo" time="0.009">
+  <properties/>
+  <testcase name="valid passport min()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$PassportValidation" time="0.006"/>
+  <testcase name="invalid passport special()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$PassportValidation" time="0.0"/>
+  <testcase name="invalid passport blank()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$PassportValidation" time="0.001"/>
+  <testcase name="invalid passport short()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$PassportValidation" time="0.0"/>
+  <testcase name="valid passport()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$PassportValidation" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$SaIdValidation" tests="16" skipped="0" failures="0" errors="0" timestamp="2026-03-30T09:21:38" hostname="payfi-demo" time="0.043">
+  <properties/>
+  <testcase name="valid SA ID - 8501015800089()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$SaIdValidation" time="0.026"/>
+  <testcase name="invalid SA ID - day 00()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$SaIdValidation" time="0.001"/>
+  <testcase name="invalid SA ID - day 32()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$SaIdValidation" time="0.001"/>
+  <testcase name="invalid SA ID - contains letters()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$SaIdValidation" time="0.0"/>
+  <testcase name="valid SA ID - 7801015012082()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$SaIdValidation" time="0.001"/>
+  <testcase name="valid SA ID - 9005152345081()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$SaIdValidation" time="0.0"/>
+  <testcase name="invalid SA ID - too long()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$SaIdValidation" time="0.0"/>
+  <testcase name="invalid SA ID - month 00()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$SaIdValidation" time="0.0"/>
+  <testcase name="invalid SA ID - month 13()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$SaIdValidation" time="0.001"/>
+  <testcase name="invalid SA ID - 8501015800085()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$SaIdValidation" time="0.001"/>
+  <testcase name="invalid SA ID - 8501015800088()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$SaIdValidation" time="0.0"/>
+  <testcase name="valid SA ID - 7508205120084()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$SaIdValidation" time="0.0"/>
+  <testcase name="invalid SA ID - empty()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$SaIdValidation" time="0.0"/>
+  <testcase name="invalid SA ID - too short()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$SaIdValidation" time="0.001"/>
+  <testcase name="invalid SA ID - wrong check 0()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$SaIdValidation" time="0.001"/>
+  <testcase name="invalid SA ID - wrong check 5()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$SaIdValidation" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

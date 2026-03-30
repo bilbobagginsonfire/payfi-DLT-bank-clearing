@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$UniqueCustomerIdValidation" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-03-30T09:21:38" hostname="payfi-demo" time="0.002">
+  <properties/>
+  <testcase name="valid min()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$UniqueCustomerIdValidation" time="0.0"/>
+  <testcase name="valid()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$UniqueCustomerIdValidation" time="0.0"/>
+  <testcase name="invalid blank()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$UniqueCustomerIdValidation" time="0.0"/>
+  <testcase name="invalid short()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$UniqueCustomerIdValidation" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -4,7 +4,7 @@ plugins {
     id 'org.jetbrains.kotlin.plugin.allopen' apply false
     id 'net.corda.plugins.cordapp-cpk2' apply false
     id 'net.corda.plugins.cordapp-cpb2' apply false
-    id 'net.corda.cordapp.cordapp-configuration' apply false
+    id 'net.corda.cordapp.cordapp-configuration'
     id 'net.corda.gradle.plugin'
 }
 
@@ -44,7 +44,7 @@ cordaRuntimeGradlePlugin {
     notaryVersion = cordaNotaryPluginsVersion
     notaryCpiName = "NotaryServer"
     corDappCpiName = "MyCorDapp"
-    cpiUploadTimeout = "30000"
+    cpiUploadTimeout = "120000"
     vnodeRegistrationTimeout = "60000"
     cordaProcessorTimeout = "300000"
     workflowsModuleName = "workflows"

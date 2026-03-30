@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- VALID: Same-bank payment — debtor and creditor agent both branch 100001 -->
+<!-- Should be accepted; fee applies if above R3,000; settlement nets to zero -->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+    <FIToFICstmrCdtTrf>
+        <GrpHdr>
+            <MsgId>MSG-TEST-SAMEBANK-001</MsgId>
+            <CreDtTm>2026-03-22T10:25:00</CreDtTm>
+            <NbOfTxs>1</NbOfTxs>
+            <SttlmInf><SttlmMtd>CLRG</SttlmMtd></SttlmInf>
+        </GrpHdr>
+        <CdtTrfTxInf>
+            <PmtId>
+                <InstrId>INSTR-SAMEBANK-001</InstrId>
+                <EndToEndId>E2E-SAMEBANK-001</EndToEndId>
+                <TxId>TX-SAMEBANK-001</TxId>
+            </PmtId>
+            <IntrBkSttlmAmt Ccy="ZAR">4500.00</IntrBkSttlmAmt>
+            <IntrBkSttlmDt>2026-03-22</IntrBkSttlmDt>
+            <Dbtr>
+                <Nm>Thabo Mokoena</Nm>
+                <Id><PrvtId><Othr><Id>8501015800089</Id><SchmeNm><Cd>NIDN</Cd></SchmeNm></Othr></PrvtId></Id>
+            </Dbtr>
+            <DbtrAcct><Id><Othr><Id>62777888999</Id></Othr></Id></DbtrAcct>
+            <!-- Same branch code for both debtor and creditor agent -->
+            <DbtrAgt><FinInstnId><ClrSysMmbId><MmbId>100001</MmbId></ClrSysMmbId></FinInstnId></DbtrAgt>
+            <Cdtr><Nm>Lerato Dlamini</Nm></Cdtr>
+            <CdtrAcct><Id><Othr><Id>62111222333</Id></Othr></Id></CdtrAcct>
+            <CdtrAgt><FinInstnId><ClrSysMmbId><MmbId>100001</MmbId></ClrSysMmbId></FinInstnId></CdtrAgt>
+            <RmtInf><Ustrd>Personal transfer</Ustrd></RmtInf>
+        </CdtTrfTxInf>
+    </FIToFICstmrCdtTrf>
+</Document>
+

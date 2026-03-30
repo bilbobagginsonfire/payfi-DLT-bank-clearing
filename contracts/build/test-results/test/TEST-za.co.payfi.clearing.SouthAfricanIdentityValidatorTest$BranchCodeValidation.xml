@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$BranchCodeValidation" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-03-30T09:21:38" hostname="payfi-demo" time="0.003">
+  <properties/>
+  <testcase name="valid leading zeros()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$BranchCodeValidation" time="0.001"/>
+  <testcase name="invalid letters()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$BranchCodeValidation" time="0.0"/>
+  <testcase name="valid()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$BranchCodeValidation" time="0.0"/>
+  <testcase name="invalid long()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$BranchCodeValidation" time="0.0"/>
+  <testcase name="invalid empty()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$BranchCodeValidation" time="0.0"/>
+  <testcase name="invalid short()" classname="za.co.payfi.clearing.SouthAfricanIdentityValidatorTest$BranchCodeValidation" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- INVALID: Missing debtor identification — should fail FICA validation (CH09) -->
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
+    <FIToFICstmrCdtTrf>
+        <GrpHdr>
+            <MsgId>MSG-TEST-INVALID-001</MsgId>
+            <CreDtTm>2026-03-22T10:15:00</CreDtTm>
+            <NbOfTxs>1</NbOfTxs>
+            <SttlmInf><SttlmMtd>CLRG</SttlmMtd></SttlmInf>
+        </GrpHdr>
+        <CdtTrfTxInf>
+            <PmtId>
+                <InstrId>INSTR-INVALID-001</InstrId>
+                <EndToEndId>E2E-INVALID-001</EndToEndId>
+                <TxId>TX-INVALID-001</TxId>
+            </PmtId>
+            <IntrBkSttlmAmt Ccy="ZAR">5000.00</IntrBkSttlmAmt>
+            <IntrBkSttlmDt>2026-03-22</IntrBkSttlmDt>
+            <!-- Debtor has name but NO identification -->
+            <Dbtr>
+                <Nm>John Doe</Nm>
+            </Dbtr>
+            <DbtrAcct><Id><Othr><Id>62000111222</Id></Othr></Id></DbtrAcct>
+            <DbtrAgt><FinInstnId><ClrSysMmbId><MmbId>100001</MmbId></ClrSysMmbId></FinInstnId></DbtrAgt>
+            <Cdtr><Nm>Shop ABC</Nm></Cdtr>
+            <CdtrAcct><Id><Othr><Id>40333444555</Id></Othr></Id></CdtrAcct>
+            <CdtrAgt><FinInstnId><ClrSysMmbId><MmbId>200002</MmbId></ClrSysMmbId></FinInstnId></CdtrAgt>
+        </CdtTrfTxInf>
+    </FIToFICstmrCdtTrf>
+</Document>
+

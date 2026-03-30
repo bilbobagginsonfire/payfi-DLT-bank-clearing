@@ -1,0 +1,267 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <!-- ================================================================== -->
+    <!-- PayFi initial schema — 6 entity tables + 1 @ElementCollection table -->
+    <!-- All column names are explicit snake_case matching @Column(name=...) -->
+    <!-- UUIDs generated in Kotlin — no DB-side default                      -->
+    <!-- ================================================================== -->
+
+    <!-- 1. payment_message_metadata -->
+    <changeSet id="payfi-001-payment-message-metadata" author="payfi">
+        <createTable tableName="payment_message_metadata">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="original_message_id" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="message_creation_time" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="number_of_transactions" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="message_digest" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="received_at" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="payment_message_metadata" indexName="idx_pmm_original_message_id">
+            <column name="original_message_id"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- 2. metadata_linked_states (@ElementCollection join table) -->
+    <changeSet id="payfi-002-metadata-linked-states" author="payfi">
+        <createTable tableName="metadata_linked_states">
+            <column name="metadata_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="state_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="metadata_linked_states"
+            baseColumnNames="metadata_id"
+            referencedTableName="payment_message_metadata"
+            referencedColumnNames="id"
+            constraintName="fk_mls_metadata_id"
+            onDelete="CASCADE"/>
+
+        <createIndex tableName="metadata_linked_states" indexName="idx_mls_metadata_id">
+            <column name="metadata_id"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- 3. idempotency_keys -->
+    <changeSet id="payfi-003-idempotency-keys" author="payfi">
+        <createTable tableName="idempotency_keys">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="message_id" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="instruction_id" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="response_payload" type="text">
+                <constraints nullable="false"/>
+            </column>
+            <column name="state_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint
+            tableName="idempotency_keys"
+            columnNames="message_id, instruction_id"
+            constraintName="uq_idem_message_instruction"/>
+
+        <createIndex tableName="idempotency_keys" indexName="idx_idem_message_id">
+            <column name="message_id"/>
+        </createIndex>
+
+        <createIndex tableName="idempotency_keys" indexName="idx_idem_state_id">
+            <column name="state_id"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- 4. fee_accruals -->
+    <changeSet id="payfi-004-fee-accruals" author="payfi">
+        <createTable tableName="fee_accruals">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="state_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="creditor_bank_branch_code" type="varchar(6)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="fee_amount" type="decimal(10,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tax_amount" type="decimal(10,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="total_amount" type="decimal(10,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="transaction_amount" type="decimal(19,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="accrual_date" type="date">
+                <constraints nullable="false"/>
+            </column>
+            <column name="invoiced" type="boolean">
+                <constraints nullable="false"/>
+            </column>
+            <column name="invoice_reference" type="varchar(255)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="reversed" type="boolean">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reversal_note" type="varchar(255)">
+                <constraints nullable="true"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="fee_accruals" indexName="idx_fa_state_id">
+            <column name="state_id"/>
+        </createIndex>
+
+        <createIndex tableName="fee_accruals" indexName="idx_fa_creditor_branch">
+            <column name="creditor_bank_branch_code"/>
+        </createIndex>
+
+        <createIndex tableName="fee_accruals" indexName="idx_fa_accrual_date">
+            <column name="accrual_date"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- 5. fee_rules -->
+    <changeSet id="payfi-005-fee-rules" author="payfi">
+        <createTable tableName="fee_rules">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="threshold_amount" type="decimal(19,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="fee_amount" type="decimal(10,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="currency" type="varchar(3)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="fee_payer" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="effective_from" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <!-- Seed: default fee rule for ZAR clearing -->
+        <insert tableName="fee_rules">
+            <column name="id" value="00000000-0000-0000-0000-000000000001"/>
+            <column name="threshold_amount" valueNumeric="3000.00"/>
+            <column name="fee_amount" valueNumeric="0.20"/>
+            <column name="currency" value="ZAR"/>
+            <column name="fee_payer" value="CREDITOR_BANK"/>
+            <column name="effective_from" valueComputed="CURRENT_TIMESTAMP"/>
+        </insert>
+    </changeSet>
+
+    <!-- 6. settlement_reports -->
+    <changeSet id="payfi-006-settlement-reports" author="payfi">
+        <createTable tableName="settlement_reports">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="bank_branch_code" type="varchar(6)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="window_start" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="window_end" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="net_amount" type="decimal(19,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="gross_payable" type="decimal(19,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="gross_receivable" type="decimal(19,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="transaction_count" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="generated_at" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="settlement_reports" indexName="idx_sr_bank_branch">
+            <column name="bank_branch_code"/>
+        </createIndex>
+
+        <createIndex tableName="settlement_reports" indexName="idx_sr_window_start">
+            <column name="window_start"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- 7. participant_status -->
+    <changeSet id="payfi-007-participant-status" author="payfi">
+        <createTable tableName="participant_status">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="branch_code" type="varchar(6)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="effective_from" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reason" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="initiated_by" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reinstated_at" type="timestamp">
+                <constraints nullable="true"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="participant_status" indexName="idx_ps_branch_code">
+            <column name="branch_code"/>
+        </createIndex>
+
+        <createIndex tableName="participant_status" indexName="idx_ps_status">
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

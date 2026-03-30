@@ -3,6 +3,7 @@ plugins {
     id 'org.jetbrains.kotlin.plugin.jpa'
     id 'org.jetbrains.kotlin.plugin.allopen'
     id 'net.corda.plugins.cordapp-cpk2'
+    id 'net.corda.plugins.cordapp-cpb2'
 }
 
 cordapp {
