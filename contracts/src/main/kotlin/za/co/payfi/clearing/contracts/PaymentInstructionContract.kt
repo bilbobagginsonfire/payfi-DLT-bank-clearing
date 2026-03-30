@@ -52,16 +52,9 @@ class PaymentInstructionContract : Contract {
          *
          * If compilation fails with the active line, swap to the fallback.
          */
-
-        // PRIMARY (likely correct for Corda 5.2 — commands are wrapped):
-        val command = transaction.commands
-            .mapNotNull { it.value as? PaymentCommand }
-            .firstOrNull()
-
-        // FALLBACK (if commands are returned directly, not wrapped):
-        // val command = transaction.commands.firstOrNull { it is PaymentCommand }
-        //     as? PaymentCommand
-
+        // Command extraction (Corda 5.2 — commands are direct, not wrapped)
+        val command = transaction.commands.firstOrNull { it is PaymentCommand }
+            as? PaymentCommand
         command ?: throw CordaRuntimeException("Transaction must contain a PaymentCommand")
 
         when (command) {

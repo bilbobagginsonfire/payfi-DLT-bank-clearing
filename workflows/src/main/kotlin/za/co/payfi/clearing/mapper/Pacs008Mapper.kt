@@ -165,11 +165,11 @@ class Pacs008Mapper {
         val addr = state.debtorAddress
         if (addr != null) {
             val pstlAdr = appendElement(doc, dbtr, "PstlAdr")
-            if (!addr.streetName.isNullOrBlank()) appendTextElement(doc, pstlAdr, "StrtNm", addr.streetName)
-            if (!addr.buildingNumber.isNullOrBlank()) appendTextElement(doc, pstlAdr, "BldgNb", addr.buildingNumber)
-            if (!addr.postCode.isNullOrBlank()) appendTextElement(doc, pstlAdr, "PstCd", addr.postCode)
-            if (!addr.townName.isNullOrBlank()) appendTextElement(doc, pstlAdr, "TwnNm", addr.townName)
-            if (!addr.country.isNullOrBlank()) appendTextElement(doc, pstlAdr, "Ctry", addr.country)
+            if (!addr.streetName.isNullOrBlank()) appendTextElement(doc, pstlAdr, "StrtNm", addr.streetName ?: "")
+            if (!addr.buildingNumber.isNullOrBlank()) appendTextElement(doc, pstlAdr, "BldgNb", addr.buildingNumber ?: "")
+            if (!addr.postCode.isNullOrBlank()) appendTextElement(doc, pstlAdr, "PstCd", addr.postCode ?: "")
+            if (!addr.townName.isNullOrBlank()) appendTextElement(doc, pstlAdr, "TwnNm", addr.townName ?: "")
+            if (!addr.country.isNullOrBlank()) appendTextElement(doc, pstlAdr, "Ctry", addr.country ?: "")
         }
 
         // Debtor Id
@@ -223,9 +223,9 @@ class Pacs008Mapper {
         appendTextElement(doc, cdtrClrSys, "MmbId", state.creditorAgentBranchCode)
 
         // RmtInf
-        if (!state.remittanceInfo.isNullOrBlank()) {
+        if (!state.remittanceInfo.isNullOrBlank()) { val rmtInfo = state.remittanceInfo ?: ""
             val rmtInf = appendElement(doc, txInf, "RmtInf")
-            appendTextElement(doc, rmtInf, "Ustrd", state.remittanceInfo)
+            appendTextElement(doc, rmtInf, "Ustrd", rmtInfo)
         }
 
         return serializeDocument(doc)

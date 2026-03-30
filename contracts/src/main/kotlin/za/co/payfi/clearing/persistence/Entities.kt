@@ -5,6 +5,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
 import javax.persistence.*
+import net.corda.v5.base.annotations.CordaSerializable
 
 /**
  * Off-ledger persistence entities for PayFi.
@@ -21,6 +22,7 @@ import javax.persistence.*
  * PostgreSQL column names match Liquibase definitions exactly.
  */
 
+@CordaSerializable
 @Entity
 @Table(name = "payment_message_metadata")
 data class PaymentMessageMetadata(
@@ -52,6 +54,7 @@ data class PaymentMessageMetadata(
     val linkedStateIds: MutableList<UUID> = mutableListOf()
 )
 
+@CordaSerializable
 @Entity
 @Table(
     name = "idempotency_keys",
@@ -86,6 +89,7 @@ data class IdempotencyKey(
  * Fee accrual record. Reversals use negative amounts.
  * CAVEAT: VAT rate (15%) is a pilot assumption.
  */
+@CordaSerializable
 @Entity
 @Table(name = "fee_accruals")
 data class FeeAccrual(
@@ -127,6 +131,7 @@ data class FeeAccrual(
     val reversalNote: String? = null
 )
 
+@CordaSerializable
 @Entity
 @Table(name = "fee_rules")
 data class FeeRule(
@@ -150,6 +155,7 @@ data class FeeRule(
     val effectiveFrom: Instant
 )
 
+@CordaSerializable
 @Entity
 @Table(name = "settlement_reports")
 data class SettlementReport(
@@ -185,6 +191,7 @@ data class SettlementReport(
 /**
  * Audit trail only — MGM metadata is authoritative for enforcement.
  */
+@CordaSerializable
 @Entity
 @Table(name = "participant_status")
 data class ParticipantStatusRecord(

@@ -1,5 +1,6 @@
 plugins {
     id 'org.jetbrains.kotlin.jvm'
+    id 'org.jetbrains.kotlin.plugin.jpa'
     id 'net.corda.plugins.cordapp-cpk2'
 }
 
@@ -25,4 +26,5 @@ dependencies {
     cordaProvided 'net.corda:corda-ledger-consensual'
     cordapp "com.r3.corda.notary.plugin.nonvalidating:notary-plugin-non-validating-client:$cordaNotaryPluginsVersion"
     cordaProvided 'org.slf4j:slf4j-api'
+    cordaProvided 'javax.persistence:javax.persistence-api:2.2'
 }
