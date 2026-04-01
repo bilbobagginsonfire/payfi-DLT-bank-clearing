@@ -116,7 +116,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--t1);height:100vh;o
     <span class="tag">Corda 5 · ISO 20022 · ZAR</span>
   </div>
   <div class="topbar-right">
-    <button class="btn clear" onclick="clearAll()">✕ Clear All</button>
+    <button class="btn clear" id="settleBtn" onclick="netSettle()">⚖ Net Settlement</button>
     <button class="btn" onclick="refreshAll()" id="refreshBtn" style="font-size:12px">↻ Refresh</button>
     <button class="btn" id="modeBtn" onclick="toggleMode()" style="font-family:var(--mono);font-size:12px;font-weight:700;color:var(--green)">● LIVE</button>
     <span><span class="dot on" id="sDot"></span><span id="sTxt">Connecting...</span></span>
@@ -144,7 +144,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--t1);height:100vh;o
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:4px;align-items:end">
         <div class="form-s" style="margin-bottom:0"><label>Creditor Account</label><input id="fCA_blue" placeholder="40567890123"/></div>
-        <div class="form-s" style="margin-bottom:0"><label>Remittance</label><input id="fRm_blue" placeholder="Invoice INV-2026-0342"/></div>
+        <div class="form-s" style="margin-bottom:0"><label>Payment Reference</label><input id="fRm_blue" placeholder="Invoice INV-2026-0342"/></div>
         <div class="form-a" style="margin-top:0">
           <button class="btn p" id="btnPay_blue" onclick="makePayment('blue')" disabled>Send →</button>
           <button class="btn demo" onclick="fillDemo('blue')">Demo</button>
@@ -162,7 +162,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--t1);height:100vh;o
     <div class="pay-form" id="fFormTurq">
       <div class="form-r">
         <div class="form-s"><label>Debtor Name</label><input id="fDN_turq" placeholder="Thandi Mokoena"/></div>
-        <div class="form-s"><label>SA ID (NIDN)</label><input id="fDI_turq" placeholder="8505025098087"/></div>
+        <div class="form-s"><label>SA ID (NIDN)</label><input id="fDI_turq" placeholder="8505025098085"/></div>
         <div class="form-s"><label>Debtor Account</label><input id="fDA_turq" placeholder="40987654321"/></div>
       </div>
       <div class="form-r">
@@ -172,7 +172,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--t1);height:100vh;o
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:4px;align-items:end">
         <div class="form-s" style="margin-bottom:0"><label>Creditor Account</label><input id="fCA_turq" placeholder="62098765432"/></div>
-        <div class="form-s" style="margin-bottom:0"><label>Remittance</label><input id="fRm_turq" placeholder="PO-2026-00891"/></div>
+        <div class="form-s" style="margin-bottom:0"><label>Payment Reference</label><input id="fRm_turq" placeholder="PO-2026-00891"/></div>
         <div class="form-a" style="margin-top:0">
           <button class="btn p turq" id="btnPay_turq" onclick="makePayment('turq')" disabled>Send →</button>
           <button class="btn demo" onclick="fillDemo('turq')">Demo</button>
@@ -202,13 +202,16 @@ body{font-family:var(--sans);background:var(--bg);color:var(--t1);height:100vh;o
 // CONFIG
 // ============================================================================
 const BANKS={
-  blue:{name:'Bank Blue',branch:'100001',hash:'9F50CDD96C86',color:'var(--blue)',fields:['fDN_blue','fDI_blue','fDA_blue','fAm_blue','fCN_blue','fCA_blue','fRm_blue']},
-  turq:{name:'Bank Turquoise',branch:'200002',hash:'9B95A99FCC14',color:'var(--turq)',fields:['fDN_turq','fDI_turq','fDA_turq','fAm_turq','fCN_turq','fCA_turq','fRm_turq']}
+  blue:{name:'Bank Blue',branch:'100001',hash:'166B20F5ED8A',color:'var(--blue)',fields:['fDN_blue','fDI_blue','fDA_blue','fAm_blue','fCN_blue','fCA_blue','fRm_blue']},
+  turq:{name:'Bank Turquoise',branch:'200002',hash:'F8CE3D7C528B',color:'var(--turq)',fields:['fDN_turq','fDI_turq','fDA_turq','fAm_turq','fCN_turq','fCA_turq','fRm_turq']}
 };
 const BRANCH_TO_NAME={'100001':'Bank Blue','200002':'Bank Turquoise'};
 const BRANCH_TO_KEY={'100001':'blue','200002':'turq'};
-const C={apiBase:'/api/v5_2',sarbHash:'ED6196CA56DE'};
-const QUERY_FLOW='za.co.payfi.clearing.flows.QueryPaymentStatesFlow';
+const C={apiBase:'/api/v5_2',sarbHash:'5C84CA45C720'};
+const QUERY_FLOW='za.co.payfi.clearing.flows.QueryPaymentInstructionsFlow';
+const SARB_QUERY_FLOW='za.co.payfi.clearing.flows.QuerySarbTransactionsFlow';
+const SETTLE_FLOW='za.co.payfi.clearing.flows.SettleTransactionsFlow';
+const SARB_SETTLE_FLOW='za.co.payfi.clearing.flows.MarkSarbSettledFlow';
 const SUBMIT_FLOW='za.co.payfi.clearing.flows.SubmitPaymentInstructionFlow';
 const AUTH='Basic '+btoa('admin:admin');
 
@@ -233,7 +236,7 @@ async function loadConfig(){
       liveMode=true;setModeUI(true);
       // Start auto-polling vnode vaults every 5 seconds
       await refreshAll();
-      pollTimer=setInterval(()=>refreshAll(),5000);
+      pollTimer=setInterval(()=>{if(!document.querySelector(".tc-det.open"))refreshAll();},15000);
     }else throw new Error(r.status);
   }catch(e){
     liveMode=false;setModeUI(false);
@@ -252,7 +255,7 @@ function toggleMode(){
   liveMode=!liveMode;setModeUI(liveMode);
   if(liveMode){
     refreshAll();
-    if(!pollTimer) pollTimer=setInterval(()=>refreshAll(),5000);
+    if(!pollTimer) pollTimer=setInterval(()=>{if(!document.querySelector(".tc-det.open"))refreshAll();},15000);
   }else{
     if(pollTimer){clearInterval(pollTimer);pollTimer=null;}
   }
@@ -281,7 +284,7 @@ function fillDemo(bk){
     $('fAm_blue').value='15000';$('fCN_blue').value='ABC Trading (Pty) Ltd';$('fCA_blue').value='40567890123';
     $('fRm_blue').value='Invoice INV-2026-0342';
   }else{
-    $('fDN_turq').value='Thandi Mokoena';$('fDI_turq').value='8505025098087';$('fDA_turq').value='40987654321';
+    $('fDN_turq').value='Thandi Mokoena';$('fDI_turq').value='8505025098085';$('fDA_turq').value='40987654321';
     $('fAm_turq').value='8500';$('fCN_turq').value='XYZ Logistics (Pty) Ltd';$('fCA_turq').value='62098765432';
     $('fRm_turq').value='PO-2026-00891';
   }
@@ -293,6 +296,28 @@ function clearBankForm(bk){BANKS[bk].fields.forEach(id=>$(id).value='');$('btnPa
 function clearAll(){
   vnodeData={blue:[],turq:[],sarb:[]};demoTxs=[];demoTxN=0;
   renderAll();$('txC').textContent='0 tx';$('lastT').textContent='';
+}
+async function netSettle(){
+  if(!liveMode){clearAll();return;}
+  if(!confirm('Execute net settlement? This will archive all current transactions on the ledger.')) return;
+  $('settleBtn').disabled=true;$('settleBtn').textContent='Settling...';
+  try{
+    const rid='settle-'+Date.now();
+    await startFlow(BANKS.blue.hash,SETTLE_FLOW,{},rid);
+    const res=await pollFlowResult(BANKS.blue.hash,rid,40,2500);
+    if(res.flowStatus==='COMPLETED'){
+      const r=JSON.parse(res.flowResult);
+      $('lastT').textContent=r.message||'Settled';
+      // Mark SARB records as settled
+      const srid='sarb-settle-'+Date.now();
+      await startFlow(C.sarbHash,SARB_SETTLE_FLOW,{},srid);
+      await pollFlowResult(C.sarbHash,srid,20,2000);
+    }else{
+      $('lastT').textContent='Settlement failed: '+(res.flowError?res.flowError.message:'unknown');
+    }
+    await refreshAll();
+  }catch(e){$('lastT').textContent='Error: '+e.message;}
+  finally{$('settleBtn').disabled=false;$('settleBtn').textContent='⚖ Net Settlement';}
 }
 
 // ============================================================================
@@ -345,7 +370,8 @@ async function runFlow(hash,flowClass,body={},maxAttempts=16,interval=1500){
 // ============================================================================
 async function queryVnode(key){
   const hash=key==='sarb'?C.sarbHash:BANKS[key].hash;
-  const result=await runFlow(hash,QUERY_FLOW,{},12,1500);
+  const flow=key==='sarb'?SARB_QUERY_FLOW:QUERY_FLOW;
+  const result=await runFlow(hash,flow,{},12,1500);
   if(Array.isArray(result)){
     vnodeData[key]=result.map(mapApiState);
   }
@@ -367,11 +393,11 @@ async function refreshAll(){
 
 // Map a single API state object → normalised tx format for renderers
 function mapApiState(s){
-  const db=s.debtorBranch||s.dbtrBranch||s.senderBranch||'';
-  const cb=s.creditorBranch||s.cdtrBranch||s.receiverBranch||'';
+  const db=s.debtorAgentBranchCode||s.debtorBranch||s.dbtrBranch||s.senderBranch||'';
+  const cb=s.creditorAgentBranchCode||s.creditorBranch||s.cdtrBranch||s.receiverBranch||'';
   const amt=s.amount||s.intrBkSttlmAmt||'0';
   const feeAmt=s.feeAmount||s.feeAmt||'0.00';
-  const feeVat=s.feeVat||s.feeTax||'0.00';
+  const feeVat=s.feeTaxAmount||s.feeVat||s.feeTax||'0.00';
   const feeApp=parseFloat(feeAmt)>0;
   return{
     id:       s.instrId||s.instructionId||s.id||'',
@@ -383,7 +409,7 @@ function mapApiState(s){
     cordaTxId:s.cordaTxId||s.cordaTransactionId||'',
     amount:   amt,
     dn:       s.debtorName||s.dbtrName||'',
-    di:       s.debtorId||s.dbtrId||s.debtorIdentification||'',
+    di:       s.debtorIdNumber||s.debtorId||s.dbtrId||s.debtorIdentification||'',
     da:       s.debtorAccount||s.dbtrAccount||'',
     cn:       s.creditorName||s.cdtrName||'',
     ca:       s.creditorAccount||s.cdtrAccount||'',
@@ -394,18 +420,31 @@ function mapApiState(s){
     senderKey:BRANCH_TO_KEY[db]||'',
     receiverKey:BRANCH_TO_KEY[cb]||'',
     status:   s.status||'CLEARED',
-    pacs008:  s.pacs008Xml||s.pacs008||'',
-    pacs002:  s.pacs002Xml||s.pacs002||'',
-    pacs002Code:s.pacs002Code||s.txStatus||(s.status==='CLEARED'?'ACCP':s.status==='REJECTED'?'RJCT':''),
+    pacs008:  s.pacs008Xml||s.pacs008||(s.instructionId?'<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08"><FIToFICstmrCdtTrf><GrpHdr><MsgId>'+s.stateId+'</MsgId><CreDtTm>'+s.settlementDate+'</CreDtTm><NbOfTxs>1</NbOfTxs><SttlmInf><SttlmMtd>CLRG</SttlmMtd></SttlmInf></GrpHdr><CdtTrfTxInf><PmtId><InstrId>'+s.instructionId+'</InstrId><EndToEndId>'+s.endToEndId+'</EndToEndId><TxId>'+s.transactionId+'</TxId></PmtId><IntrBkSttlmAmt Ccy="ZAR">'+s.amount+'</IntrBkSttlmAmt><Dbtr><Nm>'+s.debtorName+'</Nm><Id><PrvtId><Othr><Id>'+s.debtorIdNumber+'</Id><SchmeNm><Cd>NIDN</Cd></SchmeNm></Othr></PrvtId></Id></Dbtr><DbtrAcct><Id><Othr><Id>'+s.debtorAccount+'</Id></Othr></Id></DbtrAcct><DbtrAgt><FinInstnId><ClrSysMmbId><MmbId>'+s.debtorAgentBranchCode+'</MmbId></ClrSysMmbId></FinInstnId></DbtrAgt><Cdtr><Nm>'+s.creditorName+'</Nm></Cdtr><CdtrAcct><Id><Othr><Id>'+s.creditorAccount+'</Id></Othr></Id></CdtrAcct><CdtrAgt><FinInstnId><ClrSysMmbId><MmbId>'+s.creditorAgentBranchCode+'</MmbId></ClrSysMmbId></FinInstnId></CdtrAgt><RmtInf><Ustrd>'+(s.remittanceInfo||'')+'</Ustrd></RmtInf></CdtTrfTxInf></FIToFICstmrCdtTrf></Document>':''),
+    pacs002:  s.pacs002Xml||s.pacs002||(s.instructionId?'<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.002.001.10"><FIToFIPmtStsRpt><GrpHdr><MsgId>PSR-'+s.stateId+'</MsgId><CreDtTm>'+s.settlementDate+'</CreDtTm></GrpHdr><OrgnlGrpInfAndSts><OrgnlMsgId>'+s.stateId+'</OrgnlMsgId><OrgnlMsgNmId>pacs.008.001.08</OrgnlMsgNmId></OrgnlGrpInfAndSts><TxInfAndSts><OrgnlInstrId>'+s.instructionId+'</OrgnlInstrId><OrgnlEndToEndId>'+s.endToEndId+'</OrgnlEndToEndId><OrgnlTxId>'+s.transactionId+'</OrgnlTxId><TxSts>'+(s.status==='REJECTED'?'RJCT':'ACCP')+'</TxSts></TxInfAndSts></FIToFIPmtStsRpt></Document>':''),
+    pacs002Code:s.pacs002Code||s.txStatus||(s.status==='SUBMITTED'?'ACCP':s.status==='CLEARED'?'ACCP':s.status==='REJECTED'?'RJCT':''),
     feeApplicable:feeApp,
     feeAmt:   feeAmt,
     feeTax:   feeVat,
     feeAccrued:s.feeAccrued||feeApp,
     sarbCopied:s.sarbCopied!==undefined?s.sarbCopied:true,
     timing:   s.clearingLatencyMs||s.timing||null,
-    createdAt:s.createdAt||s.timestamp||'',
-    // Timeline not available from API — show creation time
-    tl:       s.createdAt?[{time:s.createdAt,event:'Recorded on ledger',done:true}]:[]
+    createdAt:s.createdAt||s.timestamp||new Date().toISOString(),
+    // Synthetic timeline for live-mode transactions from vault query
+    tl: (function(){
+      const t=s.createdAt||new Date().toISOString();
+      const steps=[
+        {time:t,event:'pacs.008 received by PayFi platform',done:true},
+        {time:t,event:'FICA validated · Branch codes resolved',done:true},
+        {time:t,event:'Fee calculated',done:true},
+        {time:t,event:'Notarised on Corda 5 · Finality confirmed',done:true},
+        {time:t,event:'pacs.002 '+(s.status==='REJECTED'?'RJCT':'ACCP')+' → Debtor bank',done:true},
+        {time:t,event:'State → Creditor bank',done:true},
+        {time:t,event:'State → SARB Observer',done:true}
+      ];
+      if(s.status==='REJECTED') return steps.slice(0,2).concat([{time:t,event:'Rejected: '+(s.statusReason||'validation failed'),done:true}]);
+      return steps;
+    }())
   };
 }
 
@@ -588,18 +627,20 @@ function renderBank(bk){
     if(isSender){
       html+=`<div class="r"><span class="l">Debtor</span><span class="v">${tx.dn}</span></div>
         <div class="r"><span class="l">SA ID (NIDN)</span><span class="v">${tx.di}</span></div>
+        <div class="r"><span class="l">Timestamp</span><span class="v">${tx.createdAt?new Date(tx.createdAt).toLocaleString():''}</span></div>
         <div class="r"><span class="l">Debtor Account</span><span class="v">${tx.da}</span></div>
         <div class="r"><span class="l">Creditor</span><span class="v">${tx.cn}</span></div>
         <div class="r"><span class="l">Creditor Account</span><span class="v">${tx.ca}</span></div>
-        <div class="r"><span class="l">Remittance</span><span class="v">${tx.rm||'—'}</span></div>`;
+        <div class="r"><span class="l">Payment Reference</span><span class="v">${tx.rm||'—'}</span></div>`;
     }else{
       html+=`<div class="r"><span class="l">Sender Name</span><span class="v">${tx.dn}</span></div>
         <div class="r"><span class="l">Sender SA ID (NIDN)</span><span class="v">${tx.di}</span></div>
+        <div class="r"><span class="l">Timestamp</span><span class="v">${tx.createdAt?new Date(tx.createdAt).toLocaleString():''}</span></div>
         <div class="r"><span class="l">Sender Account</span><span class="v">${tx.da}</span></div>
         <div class="r"><span class="l">Sender Bank</span><span class="v">${tx.dbName} (${tx.db})</span></div>
         <div class="r"><span class="l">Recipient Name</span><span class="v">${tx.cn}</span></div>
         <div class="r"><span class="l">Recipient Account</span><span class="v">${tx.ca}</span></div>
-        <div class="r"><span class="l">Remittance</span><span class="v">${tx.rm||'—'}</span></div>`;
+        <div class="r"><span class="l">Payment Reference</span><span class="v">${tx.rm||'—'}</span></div>`;
       if(tx.feeApplicable){
         html+=`<div class="fr"><span class="fl">Fee (excl VAT)</span><span class="v">R${tx.feeAmt}</span></div>
         <div class="fr"><span class="fl">VAT (15%)</span><span class="v">R${tx.feeTax}</span></div>
@@ -628,7 +669,7 @@ function renderPF(){
 
   let cleared=0,rejected=0,vol=0,fees=0,tax=0,latSum=0,latN=0,bluePaysTurq=0,turqPaysBlue=0;
   txs.forEach(tx=>{
-    if(tx.status==='CLEARED'){cleared++;const a=parseFloat(tx.amount);vol+=a;
+    if(tx.status==='CLEARED'||tx.status==='SUBMITTED'){cleared++;const a=parseFloat(tx.amount);vol+=a;
       if(tx.feeApplicable){fees+=parseFloat(tx.feeAmt);tax+=parseFloat(tx.feeTax);}
       if(tx.timing){latSum+=parseFloat(tx.timing);latN++;}
       if(tx.db==='100001'&&tx.cb==='200002')bluePaysTurq+=a;
@@ -721,7 +762,7 @@ function renderS(){
         <div class="r"><span class="l">Creditor</span><span class="v">${tx.cn}</span></div>
         <div class="r"><span class="l">Creditor Account</span><span class="v">${tx.ca}</span></div>
         <div class="r"><span class="l">Creditor Bank</span><span class="v">${tx.cbName} (${tx.cb})</span></div>
-        <div class="r"><span class="l">Remittance</span><span class="v">${tx.rm||'—'}</span></div>
+        <div class="r"><span class="l">Payment Reference</span><span class="v">${tx.rm||'—'}</span></div>
         ${tx.feeApplicable?`<div class="fr"><span class="fl">Fee</span><span class="v">R${tx.feeAmt} + R${tx.feeTax} VAT = R${(parseFloat(tx.feeAmt)+parseFloat(tx.feeTax)).toFixed(2)}</span></div>
         <div class="fr"><span class="fl">Payer</span><span class="v">${tx.cbName}</span></div>`:`<div class="fr"><span class="fl">Fee</span><span class="v" style="color:var(--t3)">N/A</span></div>`}
         <span class="xt" onclick="event.stopPropagation();togXml('${x1}')">▸ pacs.008 XML</span><div class="xb" id="${x1}">${esc(tx.pacs008)}</div>
