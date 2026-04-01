@@ -62,7 +62,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--t1);height:100vh;o
 /* Fullscreen two-column bank layout */
 .ledger-wrap{display:none}
 .panel.fullscreen .ledger-wrap{display:flex;flex:1;overflow:hidden}
-.panel.fullscreen .pb{display:none}
+.panel.fullscreen.has-ledger .pb{display:none}
 .ledger-col{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 .ledger-col .lc-head{padding:8px 14px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px}
 .ledger-col .lc-head .lc-icon{font-size:16px}
@@ -215,9 +215,9 @@ body{font-family:var(--sans);background:var(--bg);color:var(--t1);height:100vh;o
 <div class="grid" id="mainGrid">
 
   <!-- ====== BANK BLUE ====== -->
-  <div class="panel p-blue" id="panel-blue" data-key="blue">
+  <div class="panel p-blue has-ledger" id="panel-blue" data-key="blue">
     <div class="ph">
-      <div class="ind" style="background:var(--blue)"></div><img src="logo-blue.png" class="bank-logo" alt="Bank Blue"/><h2>Bank Blue</h2><span class="badge" id="hA">—</span><span class="right">Branch 100001</span>
+      <div class="ind" style="background:var(--blue)"></div><img src="logo-blue.png" class="bank-logo" alt="Bank Blue"/><h2>Bank Blue View</h2><span class="badge" id="hA">—</span><span class="right">Branch 100001</span>
       <button class="expand-btn" onclick="toggleFullscreen('blue')" title="Expand">⛶</button>
     </div>
     <div class="pay-btn-row">
@@ -237,9 +237,9 @@ body{font-family:var(--sans);background:var(--bg);color:var(--t1);height:100vh;o
   </div>
 
   <!-- ====== BANK TURQUOISE ====== -->
-  <div class="panel p-turq" id="panel-turq" data-key="turq">
+  <div class="panel p-turq has-ledger" id="panel-turq" data-key="turq">
     <div class="ph">
-      <div class="ind" style="background:var(--turq)"></div><img src="logo-turq.png" class="bank-logo" alt="Bank Turquoise"/><h2>Bank Turquoise</h2><span class="badge" id="hB">—</span><span class="right">Branch 200002</span>
+      <div class="ind" style="background:var(--turq)"></div><img src="logo-turq.png" class="bank-logo" alt="Bank Turquoise"/><h2>Bank Turquoise View</h2><span class="badge" id="hB">—</span><span class="right">Branch 200002</span>
       <button class="expand-btn" onclick="toggleFullscreen('turq')" title="Expand">⛶</button>
     </div>
     <div class="pay-btn-row">
@@ -280,8 +280,8 @@ body{font-family:var(--sans);background:var(--bg);color:var(--t1);height:100vh;o
 
 <!-- Tab bar -->
 <div class="tab-bar" id="tabBar">
-  <button class="tab-btn" id="tab-blue" onclick="toggleFullscreen('blue')">Bank Blue</button>
-  <button class="tab-btn" id="tab-turq" onclick="toggleFullscreen('turq')">Bank Turquoise</button>
+  <button class="tab-btn" id="tab-blue" onclick="toggleFullscreen('blue')">Bank Blue View</button>
+  <button class="tab-btn" id="tab-turq" onclick="toggleFullscreen('turq')">Bank Turquoise View</button>
   <button class="tab-btn" id="tab-pf" onclick="toggleFullscreen('pf')">PayFi View</button>
   <button class="tab-btn" id="tab-sarb" onclick="toggleFullscreen('sarb')">SARB View</button>
 </div>
@@ -741,8 +741,9 @@ function renderAll(){renderBank('blue');renderBank('turq');renderPF();renderS();
 // ============================================================================
 // BANK VIEW
 // ============================================================================
-function renderBankCard(tx,bk,isSender){
-  var did='d'+bk+tx.id,x1='x8'+bk+tx.id,x2='x2'+bk+tx.id;
+function renderBankCard(tx,bk,isSender,pfx){
+  pfx=pfx||'';
+  var did=pfx+'d'+bk+tx.id,x1=pfx+'x8'+bk+tx.id,x2=pfx+'x2'+bk+tx.id;
   var dirClass=isSender?'dir-sent':'dir-recv';
   var dirTagClass=isSender?'sent':'recv';
   var dirLabel=isSender?'↑ Sent':'↓ Received';
@@ -810,8 +811,8 @@ function renderBank(bk){
   }).join('');
 
   // Fullscreen ledger columns
-  outEl.innerHTML=sent.length?sent.map(function(tx){return renderBankCard(tx,bk,true);}).join(''):'<div class="empty" style="height:100%">No outgoing</div>';
-  inEl.innerHTML=recv.length?recv.map(function(tx){return renderBankCard(tx,bk,false);}).join(''):'<div class="empty" style="height:100%">No incoming</div>';
+  outEl.innerHTML=sent.length?sent.map(function(tx){return renderBankCard(tx,bk,true,'L');}).join(''):'<div class="empty" style="height:100%">No outgoing</div>';
+  inEl.innerHTML=recv.length?recv.map(function(tx){return renderBankCard(tx,bk,false,'L');}).join(''):'<div class="empty" style="height:100%">No incoming</div>';
 
   updateLedgerNet(bk,sent,recv);
 }
