@@ -7,16 +7,18 @@
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#0a0e17;--panel:#111827;--card:#1a2332;--border:#2a3a4a;
-  --t1:#e2e8f0;--t2:#94a3b8;--t3:#64748b;
+  --bg:#1b2440;--panel:#222e50;--card:#2a3660;--border:#3d4f78;
+  --t1:#ffffff;--t2:#d4dff0;--t3:#9bb0cc;
   --blue:#3b82f6;--green:#10b981;--amber:#f59e0b;--red:#ef4444;
-  --cyan:#06b6d4;--turq:#14b8a6;--purple:#8b5cf6;
-  --mono:'JetBrains Mono',monospace;--sans:'DM Sans',sans-serif
+  --cyan:#06b6d4;--turq:#14b8a6;--purple:#a855f7;--dorange:#d97706;
+  --gap:#2a4850;
+  --mono:'JetBrains Mono',monospace;--sans:'DM Sans',sans-serif;
+  --sent:#3b82f6;--recv:#10b981
 }
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:var(--sans);background:var(--bg);color:var(--t1);height:100vh;overflow:hidden;font-size:14px}
 
-.topbar{height:46px;background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 20px}
+.topbar{height:48px;background:var(--panel);border-bottom:2px solid var(--gap);display:flex;align-items:center;justify-content:space-between;padding:0 20px;z-index:100;position:relative}
 .topbar-left{display:flex;align-items:center;gap:12px}
 .topbar .tag{font-size:12px;color:var(--t3);background:var(--card);padding:3px 10px;border-radius:4px;font-family:var(--mono)}
 .topbar-right{display:flex;align-items:center;gap:16px;font-size:13px;color:var(--t2)}
@@ -29,43 +31,130 @@ body{font-family:var(--sans);background:var(--bg);color:var(--t1);height:100vh;o
 .btn.p{background:linear-gradient(135deg,var(--blue),var(--cyan));border-color:transparent;color:#fff}
 .btn.p.turq{background:linear-gradient(135deg,var(--turq),var(--cyan))}
 .btn.demo{background:linear-gradient(135deg,var(--amber),#e67e22);border-color:transparent;color:#fff}
-.btn.clear{border-color:var(--red);color:var(--red)}
+.btn.settle{background:linear-gradient(135deg,var(--dorange),#b45309);border-color:transparent;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.3)}
+.btn.settle:hover{background:linear-gradient(135deg,#f59e0b,var(--dorange));box-shadow:0 0 16px rgba(217,119,6,.35)}
 .btn:disabled{opacity:.35;cursor:not-allowed}
 
-.grid{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;height:calc(100vh - 46px);gap:1px;background:var(--border)}
-.panel{background:var(--bg);display:flex;flex-direction:column;overflow:hidden;border:2px solid transparent}
+/* ---- GRID & PANELS ---- */
+.grid{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;height:calc(100vh - 48px);gap:8px;background:var(--gap);padding:8px;position:relative;transition:all .3s ease}
+.panel{background:var(--bg);display:flex;flex-direction:column;overflow:hidden;border:2px solid transparent;position:relative;transition:all .3s ease;border-radius:12px}
 .panel.p-blue{border-color:var(--blue)}
 .panel.p-turq{border-color:var(--turq)}
 .panel.p-amber{border-color:var(--amber)}
 .panel.p-green{border-color:var(--green)}
 
-.ph{height:36px;display:flex;align-items:center;padding:0 14px;gap:8px;border-bottom:1px solid var(--border);flex-shrink:0}
+/* Fullscreen mode */
+.grid.has-fullscreen{grid-template-columns:1fr;grid-template-rows:1fr;padding-bottom:60px}
+.grid.has-fullscreen .panel{display:none}
+.grid.has-fullscreen .panel.fullscreen{display:flex;grid-column:1;grid-row:1}
+
+/* Tab bar at bottom */
+.tab-bar{display:none;position:fixed;bottom:0;left:0;right:0;height:60px;background:var(--panel);border-top:2px solid var(--gap);z-index:200;padding:6px 12px;gap:8px;align-items:center}
+.tab-bar.visible{display:flex}
+.tab-btn{flex:1;height:44px;border:none;border-radius:10px;color:#fff;font-family:var(--sans);font-size:14px;font-weight:700;cursor:pointer;transition:.2s;display:flex;align-items:center;justify-content:center;gap:8px;text-shadow:0 1px 2px rgba(0,0,0,.3)}
+.tab-btn:hover{transform:translateY(-1px);filter:brightness(1.15)}
+.tab-btn .tab-dot{width:10px;height:10px;border-radius:4px;flex-shrink:0;box-shadow:0 0 6px currentColor}
+#tab-blue{background:linear-gradient(135deg,#3b82f6,#2563eb);box-shadow:0 3px 12px rgba(59,130,246,.4)}
+#tab-turq{background:linear-gradient(135deg,#14b8a6,#0d9488);box-shadow:0 3px 12px rgba(20,184,166,.4)}
+#tab-pf{background:linear-gradient(135deg,#f59e0b,#d97706);box-shadow:0 3px 12px rgba(245,158,11,.4)}
+#tab-sarb{background:linear-gradient(135deg,#10b981,#059669);box-shadow:0 3px 12px rgba(16,185,129,.4)}
+
+/* Fullscreen two-column bank layout */
+.ledger-wrap{display:none}
+.panel.fullscreen .ledger-wrap{display:flex;flex:1;overflow:hidden}
+.panel.fullscreen .pb{display:none}
+.ledger-col{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.ledger-col .lc-head{padding:8px 14px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px}
+.ledger-col .lc-head .lc-icon{font-size:16px}
+.ledger-col.col-out .lc-head{color:#93c5fd;background:rgba(59,130,246,.08)}
+.ledger-col.col-in .lc-head{color:#6ee7b7;background:rgba(16,185,129,.08)}
+.ledger-col .lc-list{flex:1;overflow-y:auto;padding:8px 10px}
+.ledger-col .lc-list::-webkit-scrollbar{width:4px}.ledger-col .lc-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.ledger-divider{width:1px;background:var(--border);flex-shrink:0}
+.ledger-net{padding:10px 14px;border-top:2px solid var(--border);flex-shrink:0;display:none;background:rgba(255,255,255,.02)}
+.panel.fullscreen .ledger-net{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.ledger-net .ln-item{text-align:center;flex:1}
+.ledger-net .ln-label{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--t3);margin-bottom:2px}
+.ledger-net .ln-val{font-family:var(--mono);font-size:16px;font-weight:700}
+.ledger-net .ln-val.out-val{color:#93c5fd}
+.ledger-net .ln-val.in-val{color:#6ee7b7}
+.ledger-net .ln-val.net-val{color:#fbbf24}
+
+/* Mobile responsive */
+@media(max-width:900px){
+  .topbar{padding:0 10px;gap:8px}
+  .topbar .tag{display:none}
+  .topbar-right{gap:8px;font-size:11px;flex-wrap:nowrap;overflow-x:auto}
+  .topbar-right>span:nth-child(n+4){display:none}
+  .grid{grid-template-columns:1fr;grid-template-rows:repeat(4,1fr);gap:6px;padding:6px}
+  .ph .right{display:none}
+  .ph .badge{display:none}
+  .so-strip{grid-template-columns:repeat(2,1fr)}
+  .modal{width:95vw;max-height:85vh}
+  .tab-bar{height:52px;padding:4px 8px;gap:4px}
+  .tab-btn{font-size:12px;height:40px}
+  .ledger-wrap{flex-direction:column}
+  .ledger-divider{width:auto;height:1px}
+}
+
+.ph{height:40px;display:flex;align-items:center;padding:0 14px;gap:8px;border-bottom:1px solid var(--border);flex-shrink:0;border-radius:10px 10px 0 0;background:rgba(255,255,255,.03)}
+.ph .bank-logo{height:24px;width:auto;object-fit:contain;flex-shrink:0;filter:drop-shadow(0 1px 3px rgba(0,0,0,.3))}
 .ph .ind{width:10px;height:10px;border-radius:3px;flex-shrink:0}
-.ph h2{font-size:13px;font-weight:700}
+.ph h2{font-size:13px;font-weight:700;color:#fff}
 .ph .badge{font-family:var(--mono);font-size:11px;padding:2px 7px;border-radius:4px;background:var(--card);color:var(--t3)}
 .ph .right{margin-left:auto;font-size:11px;color:var(--t3);font-family:var(--mono)}
+.ph .expand-btn{width:28px;height:28px;border:1px solid var(--border);border-radius:5px;background:rgba(255,255,255,.06);color:var(--t2);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:.15s;flex-shrink:0;margin-left:6px}
+.ph .expand-btn:hover{border-color:var(--cyan);color:#fff;background:rgba(6,182,212,.15)}
+
+/* Make Payment button */
+.pay-btn-row{display:flex;align-items:center;padding:6px 14px;border-bottom:1px solid var(--border);flex-shrink:0}
+.btn.make-pay{font-size:13px;padding:7px 16px;background:linear-gradient(135deg,#3b82f6,#06b6d4);border:none;color:#fff;display:flex;align-items:center;gap:6px;border-radius:6px;font-weight:700;text-shadow:0 1px 2px rgba(0,0,0,.2);box-shadow:0 2px 8px rgba(59,130,246,.3)}
+.btn.make-pay:hover{background:linear-gradient(135deg,#60a5fa,#22d3ee);box-shadow:0 4px 14px rgba(59,130,246,.4);transform:translateY(-1px)}
+.btn.make-pay.turq-btn{background:linear-gradient(135deg,#14b8a6,#06b6d4)}
+.btn.make-pay.turq-btn:hover{background:linear-gradient(135deg,#2dd4bf,#22d3ee);box-shadow:0 4px 14px rgba(20,184,166,.4)}
+
 .pb{flex:1;overflow-y:auto;padding:10px 14px}
 .pb::-webkit-scrollbar{width:4px}.pb::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 
-/* ---- PAYMENT FORM DROPDOWN ---- */
-.pay-toggle{display:flex;align-items:center;gap:6px;padding:5px 14px;background:var(--card);border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s;flex-shrink:0}
-.pay-toggle:hover{background:rgba(59,130,246,.08)}
-.pay-toggle .chevron{color:var(--t3);font-size:13px;transition:transform .2s}
-.pay-toggle .chevron.open{transform:rotate(90deg)}
-.pay-toggle span{font-size:12px;font-weight:600}
-.pay-form{display:none;padding:8px 14px;border-bottom:1px solid var(--border);background:var(--panel);flex-shrink:0}
-.pay-form.open{display:block}
+/* ---- PAYMENT MODAL ---- */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:500;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--panel);border:1px solid var(--border);border-radius:12px;width:520px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.5),0 0 0 1px rgba(6,182,212,.15)}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)}
+.modal-head h3{font-size:16px;font-weight:700;color:#fff}
+.modal-close{width:30px;height:30px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--t3);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
+.modal-close:hover{background:var(--card);color:var(--t1)}
+.modal-body{padding:16px 20px}
+.modal-foot{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
 
 /* ---- CARDS ---- */
 .tc{background:var(--card);border:1px solid var(--border);border-radius:6px;margin-bottom:8px;overflow:hidden}
 .tc.fresh{animation:appear .3s ease}
 @keyframes appear{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+
+/* Payment direction banner */
 .tc-sum{padding:12px 14px;cursor:pointer;display:flex;align-items:center;gap:14px;transition:background .15s}
-.tc-sum:hover{background:rgba(59,130,246,.06)}
-.tc-sum .amt{font-family:var(--mono);font-size:18px;font-weight:700;color:var(--green);white-space:nowrap}
+.tc-sum:hover{background:rgba(255,255,255,.03)}
+
+/* SENT banner — bright blue */
+.tc.dir-sent{border-color:var(--sent);border-width:2px}
+.tc.dir-sent .tc-sum{background:rgba(59,130,246,.18)}
+.tc.dir-sent .tc-sum:hover{background:rgba(59,130,246,.25)}
+
+/* RECEIVED banner — bright green */
+.tc.dir-recv{border-color:var(--recv);border-width:2px}
+.tc.dir-recv .tc-sum{background:rgba(16,185,129,.18)}
+.tc.dir-recv .tc-sum:hover{background:rgba(16,185,129,.25)}
+
+.tc-sum .amt{font-family:var(--mono);font-size:18px;font-weight:700;white-space:nowrap}
+.tc.dir-sent .tc-sum .amt{color:#93c5fd}
+.tc.dir-recv .tc-sum .amt{color:#6ee7b7}
 .tc-sum .meta{flex:1;min-width:0}
 .tc-sum .meta .row1{display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:2px}
-.tc-sum .meta .row2{font-size:12px;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tc-sum .meta .row2{font-size:12px;color:var(--t1);opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tc-sum .dir-tag{font-size:11px;font-weight:700;padding:3px 10px;border-radius:4px;letter-spacing:.04em;text-transform:uppercase}
+.dir-tag.sent{background:rgba(59,130,246,.3);color:#bfdbfe}
+.dir-tag.recv{background:rgba(16,185,129,.3);color:#a7f3d0}
 .tc-sum .chevron{color:var(--t3);font-size:16px;transition:transform .2s;flex-shrink:0}
 .tc-sum .chevron.open{transform:rotate(90deg)}
 .tc-det{display:none;padding:0 14px 14px;border-top:1px solid var(--border)}
@@ -74,49 +163,47 @@ body{font-family:var(--sans);background:var(--bg);color:var(--t1);height:100vh;o
 .r{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}
 .l{color:var(--t3);font-size:11px;text-transform:uppercase;letter-spacing:.04em;font-weight:500}
 .v{font-family:var(--mono);font-size:12px;color:var(--t1);text-align:right;max-width:65%;word-break:break-all}
-.st{display:inline-block;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600;font-family:var(--mono)}
-.st.SUBMITTING{background:#1e2a3a;color:var(--t3)}.st.SUBMITTED{background:#1e3a5f;color:var(--blue)}.st.VALIDATED{background:#1a3340;color:var(--cyan)}.st.CLEARED{background:#1a3329;color:var(--green)}.st.REJECTED{background:#3b1a1a;color:var(--red)}
+.st{display:inline-block;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:700;font-family:var(--mono)}
+.st.SUBMITTING{background:#253550;color:#94a3b8}.st.SUBMITTED{background:#1e3a6e;color:#93c5fd}.st.VALIDATED{background:#164050;color:#67e8f9}.st.CLEARED{background:#14553d;color:#6ee7b7}.st.REJECTED{background:#4c1d1d;color:#fca5a5}
 .xt{font-size:11px;color:var(--blue);cursor:pointer;margin-top:4px;display:inline-block}.xt:hover{text-decoration:underline}
 .xb{background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:8px;margin-top:6px;font-family:var(--mono);font-size:10px;color:var(--t2);white-space:pre-wrap;word-break:break-all;max-height:180px;overflow-y:auto;display:none}.xb.open{display:block}
 .fr{display:flex;justify-content:space-between;padding:3px 0;font-size:12px}
-.fr .fl{color:var(--t2);font-weight:500}
+.fr .fl{color:var(--t1);font-weight:500;opacity:.8}
 .tl{margin-top:8px;padding-left:12px;border-left:2px solid var(--border)}
-.ti{position:relative;padding:2px 0 5px 12px;font-size:11px}
+.ti{position:relative;padding:2px 0 5px 12px;font-size:11px;color:var(--t1);opacity:.85}
 .ti::before{content:'';position:absolute;left:-7px;top:5px;width:8px;height:8px;border-radius:50%;border:2px solid var(--blue);background:var(--bg)}
 .ti.d::before{background:var(--green);border-color:var(--green)}
-.ti .tm{color:var(--t3);font-family:var(--mono);font-size:10px}
-.empty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--t3);font-size:14px;font-style:italic}
+.ti .tm{color:var(--t2);font-family:var(--mono);font-size:10px}
+.empty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--t2);font-size:14px;font-style:italic}
 .redact{color:var(--t3);font-style:italic;font-size:11px}
 
-.form-s{margin-bottom:3px}
-.form-s label{display:block;font-size:10px;color:var(--t3);margin-bottom:1px;text-transform:uppercase;letter-spacing:.04em;font-weight:500}
-.form-s input,.form-s select{width:100%;background:var(--card);border:1px solid var(--border);border-radius:3px;padding:5px 8px;color:var(--t1);font-family:var(--mono);font-size:12px}
+/* Form fields inside modal */
+.form-s{margin-bottom:8px}
+.form-s label{display:block;font-size:11px;color:var(--t2);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em;font-weight:500}
+.form-s input,.form-s select{width:100%;background:var(--card);border:1px solid var(--border);border-radius:5px;padding:8px 10px;color:var(--t1);font-family:var(--mono);font-size:13px}
 .form-s input:focus,.form-s select:focus{outline:none;border-color:var(--blue)}
 .form-s select option{background:var(--card);color:var(--t1)}
-.form-r{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px}
-.form-r2{display:grid;grid-template-columns:1fr 1fr;gap:4px}
-.form-a{display:flex;gap:6px;margin-top:5px;align-items:center}
-.form-a .btn{padding:5px 12px;font-size:12px}
+.form-r{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 
 .so-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px}
-.so-kpi{background:var(--card);border:1px solid var(--border);border-radius:5px;padding:8px 10px;text-align:center}
-.so-kpi .kv{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--green)}
-.so-kpi .kl{font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-top:3px}
-.so-kpi .kv.warn{color:var(--amber)}.so-kpi .kv.err{color:var(--red)}
+.so-kpi{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:10px 10px;text-align:center}
+.so-kpi .kv{font-family:var(--mono);font-size:17px;font-weight:700;color:#6ee7b7}
+.so-kpi .kl{font-size:10px;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-top:3px}
+.so-kpi .kv.warn{color:#fbbf24}.so-kpi .kv.err{color:#fca5a5}
 
 .flag{display:inline-block;padding:2px 6px;border-radius:3px;font-size:10px;font-family:var(--mono);font-weight:600;margin-left:3px}
-.flag.yes{background:#1a3329;color:var(--green)}.flag.no{background:#3b1a1a;color:var(--red)}.flag.na{background:var(--card);color:var(--t3)}
+.flag.yes{background:#166044;color:#6ee7b7}.flag.no{background:#551d1d;color:#fca5a5}.flag.na{background:var(--card);color:var(--t3)}
 </style>
 </head>
 <body>
 
 <div class="topbar">
   <div class="topbar-left">
-    <img src="payfi-white-transparent.png" alt="PayFi" style="height:32px" />
+    <a href="https://www.payfi.co.za/demo" style="display:flex;align-items:center"><img src="payfi-white-transparent.png" alt="PayFi" style="height:32px" /></a>
     <span class="tag">Corda 5 · ISO 20022 · ZAR</span>
   </div>
   <div class="topbar-right">
-    <button class="btn clear" id="settleBtn" onclick="netSettle()">⚖ Net Settlement</button>
+    <button class="btn settle" id="settleBtn" onclick="netSettle()">⇄ Settle Now</button>
     <button class="btn" onclick="refreshAll()" id="refreshBtn" style="font-size:12px">↻ Refresh</button>
     <button class="btn" id="modeBtn" onclick="toggleMode()" style="font-family:var(--mono);font-size:12px;font-weight:700;color:var(--green)">● LIVE</button>
     <span><span class="dot on" id="sDot"></span><span id="sTxt">Connecting...</span></span>
@@ -125,76 +212,112 @@ body{font-family:var(--sans);background:var(--bg);color:var(--t1);height:100vh;o
   </div>
 </div>
 
-<div class="grid">
+<div class="grid" id="mainGrid">
 
   <!-- ====== BANK BLUE ====== -->
-  <div class="panel p-blue">
-    <div class="ph"><div class="ind" style="background:var(--blue)"></div><h2>Bank Blue</h2><span class="badge" id="hA">—</span><span class="right">Branch 100001</span></div>
-    <div class="pay-toggle" onclick="togForm('blue')"><span class="chevron" id="fChevBlue">▸</span><span style="color:var(--blue)">+ Make a Payment</span></div>
-    <div class="pay-form" id="fFormBlue">
-      <div class="form-r">
-        <div class="form-s"><label>Debtor Name</label><input id="fDN_blue" placeholder="Sipho Nkosi"/></div>
-        <div class="form-s"><label>SA ID (NIDN)</label><input id="fDI_blue" placeholder="7801015012082"/></div>
-        <div class="form-s"><label>Debtor Account</label><input id="fDA_blue" placeholder="62012345678"/></div>
-      </div>
-      <div class="form-r">
-        <div class="form-s"><label>Amount (ZAR)</label><input id="fAm_blue" type="number" placeholder="15000"/></div>
-        <div class="form-s"><label>Payee Bank</label><select id="fPB_blue"><option value="turq">Bank Turquoise (200002)</option></select></div>
-        <div class="form-s"><label>Creditor Name</label><input id="fCN_blue" placeholder="ABC Trading"/></div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:4px;align-items:end">
-        <div class="form-s" style="margin-bottom:0"><label>Creditor Account</label><input id="fCA_blue" placeholder="40567890123"/></div>
-        <div class="form-s" style="margin-bottom:0"><label>Payment Reference</label><input id="fRm_blue" placeholder="Invoice INV-2026-0342"/></div>
-        <div class="form-a" style="margin-top:0">
-          <button class="btn p" id="btnPay_blue" onclick="makePayment('blue')" disabled>Send →</button>
-          <button class="btn demo" onclick="fillDemo('blue')">Demo</button>
-          <button class="btn" onclick="clearBankForm('blue')">✕</button>
-        </div>
-      </div>
+  <div class="panel p-blue" id="panel-blue" data-key="blue">
+    <div class="ph">
+      <div class="ind" style="background:var(--blue)"></div><img src="logo-blue.png" class="bank-logo" alt="Bank Blue"/><h2>Bank Blue</h2><span class="badge" id="hA">—</span><span class="right">Branch 100001</span>
+      <button class="expand-btn" onclick="toggleFullscreen('blue')" title="Expand">⛶</button>
+    </div>
+    <div class="pay-btn-row">
+      <button class="btn make-pay" onclick="openPayModal('blue')">+ Make a Payment</button>
     </div>
     <div class="pb" id="pA"><div id="aList"></div><div class="empty" id="eA">No transactions</div></div>
+    <div class="ledger-wrap" id="ledgerBlue">
+      <div class="ledger-col col-out"><div class="lc-head"><span class="lc-icon">↑</span> Payments Out</div><div class="lc-list" id="aOutList"></div></div>
+      <div class="ledger-divider"></div>
+      <div class="ledger-col col-in"><div class="lc-head"><span class="lc-icon">↓</span> Payments In</div><div class="lc-list" id="aInList"></div></div>
+    </div>
+    <div class="ledger-net" id="ledgerNetBlue">
+      <div class="ln-item"><div class="ln-label">Total Out</div><div class="ln-val out-val" id="lnOutBlue">R0.00</div></div>
+      <div class="ln-item"><div class="ln-label">Total In</div><div class="ln-val in-val" id="lnInBlue">R0.00</div></div>
+      <div class="ln-item"><div class="ln-label">Net Position</div><div class="ln-val net-val" id="lnNetBlue">R0.00</div></div>
+    </div>
   </div>
 
   <!-- ====== BANK TURQUOISE ====== -->
-  <div class="panel p-turq">
-    <div class="ph"><div class="ind" style="background:var(--turq)"></div><h2>Bank Turquoise</h2><span class="badge" id="hB">—</span><span class="right">Branch 200002</span></div>
-    <div class="pay-toggle" onclick="togForm('turq')"><span class="chevron" id="fChevTurq">▸</span><span style="color:var(--turq)">+ Make a Payment</span></div>
-    <div class="pay-form" id="fFormTurq">
-      <div class="form-r">
-        <div class="form-s"><label>Debtor Name</label><input id="fDN_turq" placeholder="Thandi Mokoena"/></div>
-        <div class="form-s"><label>SA ID (NIDN)</label><input id="fDI_turq" placeholder="8505025098085"/></div>
-        <div class="form-s"><label>Debtor Account</label><input id="fDA_turq" placeholder="40987654321"/></div>
-      </div>
-      <div class="form-r">
-        <div class="form-s"><label>Amount (ZAR)</label><input id="fAm_turq" type="number" placeholder="8500"/></div>
-        <div class="form-s"><label>Payee Bank</label><select id="fPB_turq"><option value="blue">Bank Blue (100001)</option></select></div>
-        <div class="form-s"><label>Creditor Name</label><input id="fCN_turq" placeholder="XYZ Logistics"/></div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:4px;align-items:end">
-        <div class="form-s" style="margin-bottom:0"><label>Creditor Account</label><input id="fCA_turq" placeholder="62098765432"/></div>
-        <div class="form-s" style="margin-bottom:0"><label>Payment Reference</label><input id="fRm_turq" placeholder="PO-2026-00891"/></div>
-        <div class="form-a" style="margin-top:0">
-          <button class="btn p turq" id="btnPay_turq" onclick="makePayment('turq')" disabled>Send →</button>
-          <button class="btn demo" onclick="fillDemo('turq')">Demo</button>
-          <button class="btn" onclick="clearBankForm('turq')">✕</button>
-        </div>
-      </div>
+  <div class="panel p-turq" id="panel-turq" data-key="turq">
+    <div class="ph">
+      <div class="ind" style="background:var(--turq)"></div><img src="logo-turq.png" class="bank-logo" alt="Bank Turquoise"/><h2>Bank Turquoise</h2><span class="badge" id="hB">—</span><span class="right">Branch 200002</span>
+      <button class="expand-btn" onclick="toggleFullscreen('turq')" title="Expand">⛶</button>
+    </div>
+    <div class="pay-btn-row">
+      <button class="btn make-pay turq-btn" onclick="openPayModal('turq')">+ Make a Payment</button>
     </div>
     <div class="pb" id="pB"><div id="bList"></div><div class="empty" id="eB">No transactions</div></div>
+    <div class="ledger-wrap" id="ledgerTurq">
+      <div class="ledger-col col-out"><div class="lc-head"><span class="lc-icon">↑</span> Payments Out</div><div class="lc-list" id="bOutList"></div></div>
+      <div class="ledger-divider"></div>
+      <div class="ledger-col col-in"><div class="lc-head"><span class="lc-icon">↓</span> Payments In</div><div class="lc-list" id="bInList"></div></div>
+    </div>
+    <div class="ledger-net" id="ledgerNetTurq">
+      <div class="ln-item"><div class="ln-label">Total Out</div><div class="ln-val out-val" id="lnOutTurq">R0.00</div></div>
+      <div class="ln-item"><div class="ln-label">Total In</div><div class="ln-val in-val" id="lnInTurq">R0.00</div></div>
+      <div class="ln-item"><div class="ln-label">Net Position</div><div class="ln-val net-val" id="lnNetTurq">R0.00</div></div>
+    </div>
   </div>
 
   <!-- ====== PAYFI SYSTEM OPERATOR ====== -->
-  <div class="panel p-amber">
-    <div class="ph"><div class="ind" style="background:var(--amber)"></div><h2>PayFi — System Operator</h2><span class="badge">No funds held</span><span class="right">Settlement via SAMOS (off-ledger)</span></div>
+  <div class="panel p-amber" id="panel-pf" data-key="pf">
+    <div class="ph">
+      <div class="ind" style="background:var(--amber)"></div><h2>PayFi View</h2><span class="badge">No funds held</span><span class="right">Settlement via SAMOS (off-ledger)</span>
+      <button class="expand-btn" onclick="toggleFullscreen('pf')" title="Expand">⛶</button>
+    </div>
     <div class="pb" id="pPF"><div id="pfStrip"></div><div id="pfList"></div><div class="empty" id="ePF">No clearing activity</div></div>
   </div>
 
   <!-- ====== SARB OBSERVER ====== -->
-  <div class="panel p-green">
-    <div class="ph"><div class="ind" style="background:var(--green)"></div><h2>SARB — Regulatory Observer</h2><span class="badge" id="hS">—</span><span class="right">Full FICA · All XML · All Fees</span></div>
+  <div class="panel p-green" id="panel-sarb" data-key="sarb">
+    <div class="ph">
+      <div class="ind" style="background:var(--green)"></div><h2>SARB View</h2><span class="badge" id="hS">—</span><span class="right">Full FICA · All XML · All Fees</span>
+      <button class="expand-btn" onclick="toggleFullscreen('sarb')" title="Expand">⛶</button>
+    </div>
     <div class="pb" id="pS"><div id="sList"></div><div class="empty" id="eS">No regulatory data</div></div>
   </div>
 
+</div>
+
+<!-- Tab bar -->
+<div class="tab-bar" id="tabBar">
+  <button class="tab-btn" id="tab-blue" onclick="toggleFullscreen('blue')">Bank Blue</button>
+  <button class="tab-btn" id="tab-turq" onclick="toggleFullscreen('turq')">Bank Turquoise</button>
+  <button class="tab-btn" id="tab-pf" onclick="toggleFullscreen('pf')">PayFi View</button>
+  <button class="tab-btn" id="tab-sarb" onclick="toggleFullscreen('sarb')">SARB View</button>
+</div>
+
+<!-- Payment Modal -->
+<div class="modal-overlay" id="payModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="payModalTitle">Make a Payment</h3>
+      <button class="modal-close" onclick="closePayModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="payModalBank" value="">
+      <div class="form-r" style="margin-bottom:8px">
+        <div class="form-s"><label>Debtor Name</label><input id="mDN" placeholder="Full name"/></div>
+        <div class="form-s"><label>SA ID (NIDN)</label><input id="mDI" placeholder="13-digit SA ID"/></div>
+      </div>
+      <div class="form-r" style="margin-bottom:8px">
+        <div class="form-s"><label>Debtor Account</label><input id="mDA" placeholder="Account number"/></div>
+        <div class="form-s"><label>Amount (ZAR)</label><input id="mAm" type="number" placeholder="15000"/></div>
+      </div>
+      <div class="form-r" style="margin-bottom:8px">
+        <div class="form-s"><label>Payee Bank</label><select id="mPB"></select></div>
+        <div class="form-s"><label>Creditor Name</label><input id="mCN" placeholder="Recipient name"/></div>
+      </div>
+      <div class="form-r" style="margin-bottom:8px">
+        <div class="form-s"><label>Creditor Account</label><input id="mCA" placeholder="Account number"/></div>
+        <div class="form-s"><label>Payment Reference</label><input id="mRm" placeholder="Invoice / PO reference"/></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn demo" onclick="fillModalDemo()">Demo Fill</button>
+      <button class="btn" onclick="closePayModal()">Cancel</button>
+      <button class="btn p" id="btnModalPay" onclick="submitModalPayment()" disabled>Send Payment →</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -202,8 +325,8 @@ body{font-family:var(--sans);background:var(--bg);color:var(--t1);height:100vh;o
 // CONFIG
 // ============================================================================
 const BANKS={
-  blue:{name:'Bank Blue',branch:'100001',hash:'166B20F5ED8A',color:'var(--blue)',fields:['fDN_blue','fDI_blue','fDA_blue','fAm_blue','fCN_blue','fCA_blue','fRm_blue']},
-  turq:{name:'Bank Turquoise',branch:'200002',hash:'F8CE3D7C528B',color:'var(--turq)',fields:['fDN_turq','fDI_turq','fDA_turq','fAm_turq','fCN_turq','fCA_turq','fRm_turq']}
+  blue:{name:'Bank Blue',branch:'100001',hash:'166B20F5ED8A',color:'var(--blue)'},
+  turq:{name:'Bank Turquoise',branch:'200002',hash:'F8CE3D7C528B',color:'var(--turq)'}
 };
 const BRANCH_TO_NAME={'100001':'Bank Blue','200002':'Bank Turquoise'};
 const BRANCH_TO_KEY={'100001':'blue','200002':'turq'};
@@ -216,12 +339,164 @@ const SUBMIT_FLOW='za.co.payfi.clearing.flows.SubmitPaymentInstructionFlow';
 const AUTH='Basic '+btoa('admin:admin');
 
 let liveMode=true, pollLock=false, pollTimer=null;
-// LIVE mode: each panel gets data from its own vnode
 let vnodeData={blue:[],turq:[],sarb:[]};
-// DEMO mode: client-side simulation (fallback when API not available)
 let demoTxs=[],demoTxN=0;
+let currentFullscreen=null;
 
 function $(id){return document.getElementById(id)}
+
+// ============================================================================
+// FULLSCREEN PANEL LOGIC
+// ============================================================================
+function toggleFullscreen(key){
+  const grid=$('mainGrid');
+  const tabBar=$('tabBar');
+  const panel=$('panel-'+key);
+
+  if(currentFullscreen===key){
+    grid.classList.remove('has-fullscreen');
+    panel.classList.remove('fullscreen');
+    panel.querySelector('.expand-btn').innerHTML='⛶';
+    panel.querySelector('.expand-btn').title='Expand';
+    tabBar.classList.remove('visible');
+    currentFullscreen=null;
+    document.querySelectorAll('.tab-btn').forEach(t=>t.style.display='');
+    return;
+  }
+
+  if(currentFullscreen){
+    $('panel-'+currentFullscreen).classList.remove('fullscreen');
+    $('panel-'+currentFullscreen).querySelector('.expand-btn').innerHTML='⛶';
+    $('panel-'+currentFullscreen).querySelector('.expand-btn').title='Expand';
+  }
+
+  grid.classList.add('has-fullscreen');
+  panel.classList.add('fullscreen');
+  panel.querySelector('.expand-btn').innerHTML='⊟';
+  panel.querySelector('.expand-btn').title='Minimise';
+  tabBar.classList.add('visible');
+  currentFullscreen=key;
+
+  document.querySelectorAll('.tab-btn').forEach(t=>{
+    const tabKey=t.id.replace('tab-','');
+    t.style.display=(tabKey===key)?'none':'';
+  });
+}
+
+// ============================================================================
+// PAYMENT MODAL
+// ============================================================================
+function openPayModal(bk){
+  const modal=$('payModal');
+  const bank=BANKS[bk];
+  $('payModalBank').value=bk;
+  $('payModalTitle').textContent='Send Payment — '+bank.name;
+  
+  const sel=$('mPB');
+  sel.innerHTML='';
+  Object.keys(BANKS).forEach(k=>{
+    if(k!==bk){
+      const opt=document.createElement('option');
+      opt.value=k;opt.textContent=BANKS[k].name+' ('+BANKS[k].branch+')';
+      sel.appendChild(opt);
+    }
+  });
+
+  const btn=$('btnModalPay');
+  btn.className=bk==='turq'?'btn p turq':'btn p';
+
+  ['mDN','mDI','mDA','mAm','mCN','mCA','mRm'].forEach(id=>$(id).value='');
+  btn.disabled=true;
+  modal.classList.add('open');
+}
+
+function closePayModal(){$('payModal').classList.remove('open');}
+
+document.addEventListener('input',()=>{
+  const req=['mDN','mDI','mDA','mAm','mCN','mCA'];
+  $('btnModalPay').disabled=!req.every(id=>$(id).value.trim());
+});
+
+function fillModalDemo(){
+  const bk=$('payModalBank').value;
+  if(bk==='blue'){
+    $('mDN').value='Sipho Nkosi';$('mDI').value='7801015012082';$('mDA').value='62012345678';
+    $('mAm').value='15000';$('mCN').value='ABC Trading (Pty) Ltd';$('mCA').value='40567890123';
+    $('mRm').value='Invoice INV-2026-0342';
+  }else{
+    $('mDN').value='Thandi Mokoena';$('mDI').value='8505025098085';$('mDA').value='40987654321';
+    $('mAm').value='8500';$('mCN').value='XYZ Logistics (Pty) Ltd';$('mCA').value='62098765432';
+    $('mRm').value='PO-2026-00891';
+  }
+  $('btnModalPay').disabled=false;
+}
+
+async function submitModalPayment(){
+  const bk=$('payModalBank').value;
+  const p={amount:$('mAm').value,dn:$('mDN').value,di:$('mDI').value,da:$('mDA').value,cn:$('mCN').value,ca:$('mCA').value,rm:$('mRm').value};
+  const sender=BANKS[bk];
+  const recvKey=$('mPB').value;
+  const receiver=BANKS[recvKey];
+
+  $('btnModalPay').disabled=true;$('btnModalPay').textContent='Processing...';
+  const t0=performance.now();
+
+  if(liveMode){
+    const pacs008=genPacs008(p,sender,receiver);
+    const rid='pay-'+Date.now();
+    let statusMsg='';
+    try{
+      const startRes=await startFlow(sender.hash,SUBMIT_FLOW,{pacs008Xml:pacs008},rid);
+      if(startRes.error){statusMsg='API Error: '+startRes.error;}
+      else{
+        const res=await pollFlowResult(sender.hash,rid,40,2500);
+        if(res.flowStatus==='COMPLETED'){statusMsg='Payment cleared';}
+        else if(res.flowStatus==='FAILED'){
+          const em=res.flowError?(typeof res.flowError==='object'?res.flowError.message||JSON.stringify(res.flowError):String(res.flowError)):'Unknown error';
+          statusMsg='Flow failed: '+em;
+        }else{statusMsg='Timeout — check server logs';}
+      }
+    }catch(e){statusMsg='Exception: '+e.message;}
+    const elapsed=Math.round(performance.now()-t0);
+    $('lastT').textContent=elapsed+'ms';
+    await refreshAll();
+  }else{
+    const mid='MSG-'+Date.now(),iid='INSTR-'+(++demoTxN),eid='E2E-'+demoTxN,tid='TX-'+demoTxN;
+    const pacs008=genPacs008(p,sender,receiver);
+    const tx={
+      id:iid,msgId:mid,instrId:iid,e2eId:eid,txId:tid,
+      stateId:'ST-'+Date.now().toString(36).toUpperCase(),cordaTxId:'CTX-'+Date.now().toString(36).toUpperCase(),
+      amount:p.amount,dn:p.dn,di:p.di,da:p.da,cn:p.cn,ca:p.ca,rm:p.rm,
+      db:sender.branch,cb:receiver.branch,dbName:sender.name,cbName:receiver.name,
+      senderKey:bk,receiverKey:recvKey,
+      status:'SUBMITTING',pacs008:pacs008,pacs002:null,pacs002Code:null,
+      feeApplicable:parseFloat(p.amount)>3000,
+      feeAmt:parseFloat(p.amount)>3000?'0.20':'0.00',
+      feeTax:parseFloat(p.amount)>3000?'0.03':'0.00',
+      feeAccrued:false,sarbCopied:false,timing:null,
+      tl:[{time:new Date().toISOString(),event:'pacs.008 created by '+sender.name,done:true}]
+    };
+    demoTxs.unshift(tx);renderAll();
+    await dly(300);tx.status='SUBMITTED';tx.tl.push({time:new Date().toISOString(),event:'Received by PayFi platform',done:true});renderAll();
+    await dly(250);tx.status='VALIDATED';tx.tl.push({time:new Date().toISOString(),event:'FICA validated · Branch codes resolved',done:true});renderAll();
+    await dly(200);tx.tl.push({time:new Date().toISOString(),event:'Fee calculated',done:true});renderAll();
+    await dly(350);tx.status='CLEARED';tx.pacs002=demoPacs002(mid,iid,eid,'ACCP');tx.pacs002Code='ACCP';
+    tx.feeAccrued=tx.feeApplicable;tx.sarbCopied=true;
+    tx.tl.push({time:new Date().toISOString(),event:'Notarised on Corda 5 · Finality confirmed',done:true});
+    tx.tl.push({time:new Date().toISOString(),event:'pacs.002 ACCP → '+sender.name,done:true});
+    tx.tl.push({time:new Date().toISOString(),event:'State → '+receiver.name,done:true});
+    tx.tl.push({time:new Date().toISOString(),event:'State → SARB Observer',done:true});
+    tx.timing=Math.round(performance.now()-t0);
+    $('lastT').textContent=tx.timing+'ms';
+    $('txC').textContent=demoTxs.length+' tx';
+  }
+
+  closePayModal();
+  $('btnModalPay').textContent='Send Payment →';
+  renderAll();
+}
+
+$('payModal').addEventListener('click',function(e){if(e.target===this)closePayModal();});
 
 // ============================================================================
 // INIT
@@ -231,12 +506,11 @@ async function loadConfig(){
   $('hB').textContent=BANKS.turq.hash;
   $('hS').textContent=C.sarbHash;
   try{
-    const r=await fetch(`${C.apiBase}/flow/${BANKS.blue.hash}`,{method:'GET',headers:{'Authorization':AUTH},signal:AbortSignal.timeout(5000)});
+    const r=await fetch(C.apiBase+'/flow/'+BANKS.blue.hash,{method:'GET',headers:{'Authorization':AUTH},signal:AbortSignal.timeout(5000)});
     if(r.ok||r.status===400||r.status===404){
       liveMode=true;setModeUI(true);
-      // Start auto-polling vnode vaults every 5 seconds
       await refreshAll();
-      pollTimer=setInterval(()=>{if(!document.querySelector(".tc-det.open"))refreshAll();},15000);
+      pollTimer=setInterval(function(){if(!document.querySelector(".tc-det.open"))refreshAll();},15000);
     }else throw new Error(r.status);
   }catch(e){
     liveMode=false;setModeUI(false);
@@ -255,7 +529,7 @@ function toggleMode(){
   liveMode=!liveMode;setModeUI(liveMode);
   if(liveMode){
     refreshAll();
-    if(!pollTimer) pollTimer=setInterval(()=>{if(!document.querySelector(".tc-det.open"))refreshAll();},15000);
+    if(!pollTimer) pollTimer=setInterval(function(){if(!document.querySelector(".tc-det.open"))refreshAll();},15000);
   }else{
     if(pollTimer){clearInterval(pollTimer);pollTimer=null;}
   }
@@ -263,36 +537,8 @@ function toggleMode(){
 }
 
 // ============================================================================
-// FORM CONTROLS
+// NET SETTLE
 // ============================================================================
-function togForm(bk){
-  const id=bk==='blue'?'fFormBlue':'fFormTurq';
-  const chev=bk==='blue'?'fChevBlue':'fChevTurq';
-  $(id).classList.toggle('open');$(chev).classList.toggle('open');
-}
-
-document.addEventListener('input',()=>{
-  ['blue','turq'].forEach(bk=>{
-    const req=BANKS[bk].fields.slice(0,6);
-    $('btnPay_'+bk).disabled=!req.every(id=>$(id).value.trim());
-  });
-});
-
-function fillDemo(bk){
-  if(bk==='blue'){
-    $('fDN_blue').value='Sipho Nkosi';$('fDI_blue').value='7801015012082';$('fDA_blue').value='62012345678';
-    $('fAm_blue').value='15000';$('fCN_blue').value='ABC Trading (Pty) Ltd';$('fCA_blue').value='40567890123';
-    $('fRm_blue').value='Invoice INV-2026-0342';
-  }else{
-    $('fDN_turq').value='Thandi Mokoena';$('fDI_turq').value='8505025098085';$('fDA_turq').value='40987654321';
-    $('fAm_turq').value='8500';$('fCN_turq').value='XYZ Logistics (Pty) Ltd';$('fCA_turq').value='62098765432';
-    $('fRm_turq').value='PO-2026-00891';
-  }
-  $('btnPay_'+bk).disabled=false;
-  if(!$('fForm'+(bk==='blue'?'Blue':'Turq')).classList.contains('open')) togForm(bk);
-}
-
-function clearBankForm(bk){BANKS[bk].fields.forEach(id=>$(id).value='');$('btnPay_'+bk).disabled=true;}
 function clearAll(){
   vnodeData={blue:[],turq:[],sarb:[]};demoTxs=[];demoTxN=0;
   renderAll();$('txC').textContent='0 tx';$('lastT').textContent='';
@@ -308,7 +554,6 @@ async function netSettle(){
     if(res.flowStatus==='COMPLETED'){
       const r=JSON.parse(res.flowResult);
       $('lastT').textContent=r.message||'Settled';
-      // Mark SARB records as settled
       const srid='sarb-settle-'+Date.now();
       await startFlow(C.sarbHash,SARB_SETTLE_FLOW,{},srid);
       await pollFlowResult(C.sarbHash,srid,20,2000);
@@ -317,7 +562,7 @@ async function netSettle(){
     }
     await refreshAll();
   }catch(e){$('lastT').textContent='Error: '+e.message;}
-  finally{$('settleBtn').disabled=false;$('settleBtn').textContent='⚖ Net Settlement';}
+  finally{$('settleBtn').disabled=false;$('settleBtn').textContent='⇄ Settle Now';}
 }
 
 // ============================================================================
@@ -332,20 +577,21 @@ async function apiGet(url){
   if(!r.ok) return null;
   return r.json();
 }
-function dly(ms){return new Promise(r=>setTimeout(r,ms));}
+function dly(ms){return new Promise(function(r){setTimeout(r,ms);});}
 
 async function startFlow(hash,flowClass,requestBody,rid){
   try{
-    const d=await apiPost(`${C.apiBase}/flow/${hash}`,{clientRequestId:rid,flowClassName:flowClass,requestBody:requestBody});
+    var d=await apiPost(C.apiBase+'/flow/'+hash,{clientRequestId:rid,flowClassName:flowClass,requestBody:requestBody});
     return d;
   }catch(e){return{error:e.message};}
 }
 
-async function pollFlowResult(hash,rid,maxAttempts=40,interval=2500){
-  for(let i=0;i<maxAttempts;i++){
+async function pollFlowResult(hash,rid,maxAttempts,interval){
+  maxAttempts=maxAttempts||40;interval=interval||2500;
+  for(var i=0;i<maxAttempts;i++){
     await dly(interval);
     try{
-      const d=await apiGet(`${C.apiBase}/flow/${hash}/${rid}`);
+      var d=await apiGet(C.apiBase+'/flow/'+hash+'/'+rid);
       if(!d) continue;
       if(d.flowStatus==='COMPLETED'||d.flowStatus==='FAILED') return d;
     }catch(e){}
@@ -353,12 +599,12 @@ async function pollFlowResult(hash,rid,maxAttempts=40,interval=2500){
   return{flowStatus:'TIMEOUT'};
 }
 
-// Helper: start a flow, poll for result, return parsed flowResult
-async function runFlow(hash,flowClass,body={},maxAttempts=16,interval=1500){
-  const rid=`q-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
-  const start=await startFlow(hash,flowClass,body,rid);
+async function runFlow(hash,flowClass,body,maxAttempts,interval){
+  body=body||{};maxAttempts=maxAttempts||16;interval=interval||1500;
+  var rid='q-'+Date.now()+'-'+Math.random().toString(36).slice(2,7);
+  var start=await startFlow(hash,flowClass,body,rid);
   if(start.error) return null;
-  const res=await pollFlowResult(hash,rid,maxAttempts,interval);
+  var res=await pollFlowResult(hash,rid,maxAttempts,interval);
   if(res.flowStatus==='COMPLETED'&&res.flowResult){
     try{return JSON.parse(res.flowResult);}catch(e){return res.flowResult;}
   }
@@ -366,12 +612,12 @@ async function runFlow(hash,flowClass,body={},maxAttempts=16,interval=1500){
 }
 
 // ============================================================================
-// VAULT POLLING — query each vnode for its states
+// VAULT POLLING
 // ============================================================================
 async function queryVnode(key){
-  const hash=key==='sarb'?C.sarbHash:BANKS[key].hash;
-  const flow=key==='sarb'?SARB_QUERY_FLOW:QUERY_FLOW;
-  const result=await runFlow(hash,flow,{},12,1500);
+  var hash=key==='sarb'?C.sarbHash:BANKS[key].hash;
+  var flow=key==='sarb'?SARB_QUERY_FLOW:QUERY_FLOW;
+  var result=await runFlow(hash,flow,{},12,1500);
   if(Array.isArray(result)){
     vnodeData[key]=result.map(mapApiState);
   }
@@ -382,23 +628,20 @@ async function refreshAll(){
   pollLock=true;
   $('refreshBtn').textContent='↻ ...';
   try{
-    // Query all 3 vnodes in parallel
     await Promise.all([queryVnode('blue'),queryVnode('turq'),queryVnode('sarb')]);
-    const total=vnodeData.blue.length+vnodeData.turq.length;
-    $('txC').textContent=`${Math.max(vnodeData.blue.length,vnodeData.turq.length)} tx`;
+    $('txC').textContent=Math.max(vnodeData.blue.length,vnodeData.turq.length)+' tx';
     renderAll();
   }catch(e){console.warn('Refresh error:',e);}
   finally{pollLock=false;$('refreshBtn').textContent='↻ Refresh';}
 }
 
-// Map a single API state object → normalised tx format for renderers
 function mapApiState(s){
-  const db=s.debtorAgentBranchCode||s.debtorBranch||s.dbtrBranch||s.senderBranch||'';
-  const cb=s.creditorAgentBranchCode||s.creditorBranch||s.cdtrBranch||s.receiverBranch||'';
-  const amt=s.amount||s.intrBkSttlmAmt||'0';
-  const feeAmt=s.feeAmount||s.feeAmt||'0.00';
-  const feeVat=s.feeTaxAmount||s.feeVat||s.feeTax||'0.00';
-  const feeApp=parseFloat(feeAmt)>0;
+  var db=s.debtorAgentBranchCode||s.debtorBranch||s.dbtrBranch||s.senderBranch||'';
+  var cb=s.creditorAgentBranchCode||s.creditorBranch||s.cdtrBranch||s.receiverBranch||'';
+  var amt=s.amount||s.intrBkSttlmAmt||'0';
+  var feeAmt=s.feeAmount||s.feeAmt||'0.00';
+  var feeVat=s.feeTaxAmount||s.feeVat||s.feeTax||'0.00';
+  var feeApp=parseFloat(feeAmt)>0;
   return{
     id:       s.instrId||s.instructionId||s.id||'',
     msgId:    s.msgId||s.messageId||'',
@@ -430,10 +673,9 @@ function mapApiState(s){
     sarbCopied:s.sarbCopied!==undefined?s.sarbCopied:true,
     timing:   s.clearingLatencyMs||s.timing||null,
     createdAt:s.createdAt||s.timestamp||new Date().toISOString(),
-    // Synthetic timeline for live-mode transactions from vault query
     tl: (function(){
-      const t=s.createdAt||new Date().toISOString();
-      const steps=[
+      var t=s.createdAt||new Date().toISOString();
+      var steps=[
         {time:t,event:'pacs.008 received by PayFi platform',done:true},
         {time:t,event:'FICA validated · Branch codes resolved',done:true},
         {time:t,event:'Fee calculated',done:true},
@@ -449,139 +691,39 @@ function mapApiState(s){
 }
 
 // ============================================================================
-// PACS GENERATION (for payment submission)
+// PACS GENERATION
 // ============================================================================
 function genPacs008(p,sender,receiver){
-  const now=new Date().toISOString().slice(0,19),today=new Date().toISOString().slice(0,10);
-  const mid=`MSG-${Date.now()}`,iid=`INSTR-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
-  const eid=`E2E-${Date.now()}`,tid=`TX-${Date.now()}`;
-  return`<?xml version="1.0" encoding="UTF-8"?>
-<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">
-  <FIToFICstmrCdtTrf>
-    <GrpHdr><MsgId>${mid}</MsgId><CreDtTm>${now}</CreDtTm><NbOfTxs>1</NbOfTxs><SttlmInf><SttlmMtd>CLRG</SttlmMtd></SttlmInf></GrpHdr>
-    <CdtTrfTxInf>
-      <PmtId><InstrId>${iid}</InstrId><EndToEndId>${eid}</EndToEndId><TxId>${tid}</TxId></PmtId>
-      <IntrBkSttlmAmt Ccy="ZAR">${p.amount}.00</IntrBkSttlmAmt><IntrBkSttlmDt>${today}</IntrBkSttlmDt>
-      <Dbtr><Nm>${p.dn}</Nm><Id><PrvtId><Othr><Id>${p.di}</Id><SchmeNm><Cd>NIDN</Cd></SchmeNm></Othr></PrvtId></Id></Dbtr>
-      <DbtrAcct><Id><Othr><Id>${p.da}</Id></Othr></Id></DbtrAcct>
-      <DbtrAgt><FinInstnId><ClrSysMmbId><MmbId>${sender.branch}</MmbId></ClrSysMmbId></FinInstnId></DbtrAgt>
-      <Cdtr><Nm>${p.cn}</Nm></Cdtr>
-      <CdtrAcct><Id><Othr><Id>${p.ca}</Id></Othr></Id></CdtrAcct>
-      <CdtrAgt><FinInstnId><ClrSysMmbId><MmbId>${receiver.branch}</MmbId></ClrSysMmbId></FinInstnId></CdtrAgt>
-      <RmtInf><Ustrd>${p.rm||''}</Ustrd></RmtInf>
-    </CdtTrfTxInf>
-  </FIToFICstmrCdtTrf>
-</Document>`;}
-
-function demoPacs002(mid,iid,eid,st){return`<?xml version="1.0"?>\n<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.002.001.10"><FIToFIPmtStsRpt><GrpHdr><MsgId>PSR-${Date.now()}</MsgId></GrpHdr><OrgnlGrpInfAndSts><OrgnlMsgId>${mid}</OrgnlMsgId><OrgnlMsgNmId>pacs.008.001.08</OrgnlMsgNmId></OrgnlGrpInfAndSts><TxInfAndSts><OrgnlInstrId>${iid}</OrgnlInstrId><OrgnlEndToEndId>${eid}</OrgnlEndToEndId><TxSts>${st}</TxSts></TxInfAndSts></FIToFIPmtStsRpt></Document>`;}
-
-// ============================================================================
-// MAKE PAYMENT
-// ============================================================================
-async function makePayment(bk){
-  const sender=BANKS[bk];
-  const recvKey=$('fPB_'+bk).value;
-  const receiver=BANKS[recvKey];
-  const p={amount:$('fAm_'+bk).value,dn:$('fDN_'+bk).value,di:$('fDI_'+bk).value,da:$('fDA_'+bk).value,cn:$('fCN_'+bk).value,ca:$('fCA_'+bk).value,rm:$('fRm_'+bk).value};
-
-  $('btnPay_'+bk).disabled=true;$('btnPay_'+bk).textContent='Processing...';
-  const t0=performance.now();
-
-  if(liveMode){
-    // ========== LIVE: submit via Corda API, then refresh vaults ==========
-    const pacs008=genPacs008(p,sender,receiver);
-    const rid=`pay-${Date.now()}`;
-    let statusMsg='';
-    try{
-      const startRes=await startFlow(sender.hash,SUBMIT_FLOW,{pacs008Xml:pacs008},rid);
-      if(startRes.error){
-        statusMsg=`API Error: ${startRes.error}`;
-      }else{
-        // Poll for flow completion
-        const res=await pollFlowResult(sender.hash,rid,40,2500);
-        if(res.flowStatus==='COMPLETED'){
-          statusMsg='Payment cleared';
-        }else if(res.flowStatus==='FAILED'){
-          const em=res.flowError?(typeof res.flowError==='object'?res.flowError.message||JSON.stringify(res.flowError):String(res.flowError)):'Unknown error';
-          statusMsg=`Flow failed: ${em}`;
-        }else{
-          statusMsg='Timeout — check server logs';
-        }
-      }
-    }catch(e){statusMsg=`Exception: ${e.message}`;}
-
-    const elapsed=Math.round(performance.now()-t0);
-    $('lastT').textContent=`${elapsed}ms`;
-
-    // Refresh all vaults to pick up the new state from each vnode
-    await refreshAll();
-
-  }else{
-    // ========== DEMO: client-side simulation ==========
-    const mid=`MSG-${Date.now()}`,iid=`INSTR-${++demoTxN}`,eid=`E2E-${demoTxN}`,tid=`TX-${demoTxN}`;
-    const pacs008=genPacs008(p,sender,receiver);
-    const tx={
-      id:iid,msgId:mid,instrId:iid,e2eId:eid,txId:tid,
-      stateId:`ST-${Date.now().toString(36).toUpperCase()}`,cordaTxId:`CTX-${Date.now().toString(36).toUpperCase()}`,
-      amount:p.amount,dn:p.dn,di:p.di,da:p.da,cn:p.cn,ca:p.ca,rm:p.rm,
-      db:sender.branch,cb:receiver.branch,dbName:sender.name,cbName:receiver.name,
-      senderKey:bk,receiverKey:recvKey,
-      status:'SUBMITTING',pacs008:pacs008,pacs002:null,pacs002Code:null,
-      feeApplicable:parseFloat(p.amount)>3000,
-      feeAmt:parseFloat(p.amount)>3000?'0.20':'0.00',
-      feeTax:parseFloat(p.amount)>3000?'0.03':'0.00',
-      feeAccrued:false,sarbCopied:false,timing:null,
-      tl:[{time:new Date().toISOString(),event:`pacs.008 created by ${sender.name}`,done:true}]
-    };
-    demoTxs.unshift(tx);renderAll();
-    await dly(300);tx.status='SUBMITTED';tx.tl.push({time:new Date().toISOString(),event:'Received by PayFi platform',done:true});renderAll();
-    await dly(250);tx.status='VALIDATED';tx.tl.push({time:new Date().toISOString(),event:'FICA validated · Branch codes resolved',done:true});renderAll();
-    await dly(200);tx.tl.push({time:new Date().toISOString(),event:'Fee calculated',done:true});renderAll();
-    await dly(350);tx.status='CLEARED';tx.pacs002=demoPacs002(mid,iid,eid,'ACCP');tx.pacs002Code='ACCP';
-    tx.feeAccrued=tx.feeApplicable;tx.sarbCopied=true;
-    tx.tl.push({time:new Date().toISOString(),event:'Notarised on Corda 5 · Finality confirmed',done:true});
-    tx.tl.push({time:new Date().toISOString(),event:`pacs.002 ACCP → ${sender.name}`,done:true});
-    tx.tl.push({time:new Date().toISOString(),event:`State → ${receiver.name}`,done:true});
-    tx.tl.push({time:new Date().toISOString(),event:'State → SARB Observer',done:true});
-    tx.timing=Math.round(performance.now()-t0);
-    $('lastT').textContent=`${tx.timing}ms`;
-    $('txC').textContent=`${demoTxs.length} tx`;
-  }
-
-  // Collapse form and clear
-  const formId=bk==='blue'?'fFormBlue':'fFormTurq';
-  const chevId=bk==='blue'?'fChevBlue':'fChevTurq';
-  $(formId).classList.remove('open');$(chevId).classList.remove('open');
-  clearBankForm(bk);
-  $('btnPay_'+bk).textContent='Send →';
-  renderAll();
+  var now=new Date().toISOString().slice(0,19),today=new Date().toISOString().slice(0,10);
+  var mid='MSG-'+Date.now(),iid='INSTR-'+Date.now()+'-'+Math.random().toString(36).slice(2,6);
+  var eid='E2E-'+Date.now(),tid='TX-'+Date.now();
+  return'<?xml version="1.0" encoding="UTF-8"?>\n<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.008.001.08">\n  <FIToFICstmrCdtTrf>\n    <GrpHdr><MsgId>'+mid+'</MsgId><CreDtTm>'+now+'</CreDtTm><NbOfTxs>1</NbOfTxs><SttlmInf><SttlmMtd>CLRG</SttlmMtd></SttlmInf></GrpHdr>\n    <CdtTrfTxInf>\n      <PmtId><InstrId>'+iid+'</InstrId><EndToEndId>'+eid+'</EndToEndId><TxId>'+tid+'</TxId></PmtId>\n      <IntrBkSttlmAmt Ccy="ZAR">'+p.amount+'.00</IntrBkSttlmAmt><IntrBkSttlmDt>'+today+'</IntrBkSttlmDt>\n      <Dbtr><Nm>'+p.dn+'</Nm><Id><PrvtId><Othr><Id>'+p.di+'</Id><SchmeNm><Cd>NIDN</Cd></SchmeNm></Othr></PrvtId></Id></Dbtr>\n      <DbtrAcct><Id><Othr><Id>'+p.da+'</Id></Othr></Id></DbtrAcct>\n      <DbtrAgt><FinInstnId><ClrSysMmbId><MmbId>'+sender.branch+'</MmbId></ClrSysMmbId></FinInstnId></DbtrAgt>\n      <Cdtr><Nm>'+p.cn+'</Nm></Cdtr>\n      <CdtrAcct><Id><Othr><Id>'+p.ca+'</Id></Othr></Id></CdtrAcct>\n      <CdtrAgt><FinInstnId><ClrSysMmbId><MmbId>'+receiver.branch+'</MmbId></ClrSysMmbId></FinInstnId></CdtrAgt>\n      <RmtInf><Ustrd>'+(p.rm||'')+'</Ustrd></RmtInf>\n    </CdtTrfTxInf>\n  </FIToFICstmrCdtTrf>\n</Document>';
 }
+
+function demoPacs002(mid,iid,eid,st){return'<?xml version="1.0"?>\n<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pacs.002.001.10"><FIToFIPmtStsRpt><GrpHdr><MsgId>PSR-'+Date.now()+'</MsgId></GrpHdr><OrgnlGrpInfAndSts><OrgnlMsgId>'+mid+'</OrgnlMsgId><OrgnlMsgNmId>pacs.008.001.08</OrgnlMsgNmId></OrgnlGrpInfAndSts><TxInfAndSts><OrgnlInstrId>'+iid+'</OrgnlInstrId><OrgnlEndToEndId>'+eid+'</OrgnlEndToEndId><TxSts>'+st+'</TxSts></TxInfAndSts></FIToFIPmtStsRpt></Document>';}
 
 // ============================================================================
 // RENDERING HELPERS
 // ============================================================================
 function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function togXml(id){$(id).classList.toggle('open');}
-function togDet(id){const el=$(id);el.classList.toggle('open');const ch=el.previousElementSibling.querySelector('.chevron');if(ch)ch.classList.toggle('open');}
+function togDet(id){var el=$(id);el.classList.toggle('open');var ch=el.previousElementSibling.querySelector('.chevron');if(ch)ch.classList.toggle('open');}
 function fmtAmt(v){return parseFloat(v||0).toLocaleString('en-ZA',{minimumFractionDigits:2});}
-function tlHtml(tl){if(!tl||!tl.length)return'';return tl.map(t=>`<div class="ti ${t.done?'d':''}"><span class="tm">${new Date(t.time).toLocaleTimeString()}</span> — ${t.event}</div>`).join('');}
-function flag(v){return v===true?`<span class="flag yes">YES</span>`:v===false?`<span class="flag no">NO</span>`:`<span class="flag na">N/A</span>`;}
+function tlHtml(tl){if(!tl||!tl.length)return'';return tl.map(function(t){return'<div class="ti '+(t.done?'d':'')+'"><span class="tm">'+new Date(t.time).toLocaleTimeString()+'</span> — '+t.event+'</div>';}).join('');}
+function flag(v){return v===true?'<span class="flag yes">YES</span>':v===false?'<span class="flag no">NO</span>':'<span class="flag na">N/A</span>';}
 
-// Get the tx list for a given panel
 function getTxsForBank(bk){
   if(liveMode) return vnodeData[bk]||[];
-  // Demo mode: show txs where this bank is sender or receiver
-  return demoTxs.filter(tx=>{
+  return demoTxs.filter(function(tx){
     if(tx.senderKey===bk)return true;
-    if(tx.receiverKey===bk)return['CLEARED','VALIDATED','SUBMITTED'].includes(tx.status);
+    if(tx.receiverKey===bk)return['CLEARED','VALIDATED','SUBMITTED'].indexOf(tx.status)>=0;
     return false;
   });
 }
 function getTxsForPF(){
   if(liveMode){
-    // Merge blue + turq, dedup by instrId. PayFi has admin access to both bank vnodes.
-    const map=new Map();
-    [...(vnodeData.blue||[]),...(vnodeData.turq||[])].forEach(tx=>{
+    var map=new Map();
+    [].concat(vnodeData.blue||[],vnodeData.turq||[]).forEach(function(tx){
       if(tx.instrId) map.set(tx.instrId,tx);
       else if(tx.id) map.set(tx.id,tx);
     });
@@ -591,184 +733,150 @@ function getTxsForPF(){
 }
 function getTxsForSARB(){
   if(liveMode) return vnodeData.sarb||[];
-  return demoTxs.filter(tx=>tx.sarbCopied||tx.status==='CLEARED');
+  return demoTxs.filter(function(tx){return tx.sarbCopied||tx.status==='CLEARED';});
 }
 
 function renderAll(){renderBank('blue');renderBank('turq');renderPF();renderS();}
 
 // ============================================================================
-// BANK VIEW — renders from vnode query data (LIVE) or demoTxs (DEMO)
+// BANK VIEW
 // ============================================================================
+function renderBankCard(tx,bk,isSender){
+  var did='d'+bk+tx.id,x1='x8'+bk+tx.id,x2='x2'+bk+tx.id;
+  var dirClass=isSender?'dir-sent':'dir-recv';
+  var dirTagClass=isSender?'sent':'recv';
+  var dirLabel=isSender?'↑ Sent':'↓ Received';
+  var amtDisplay=isSender?'(R'+fmtAmt(tx.amount)+')':'R'+fmtAmt(tx.amount);
+
+  var html='<div class="tc fresh '+dirClass+'">';
+  html+='<div class="tc-sum" onclick="togDet(\''+did+'\')">';
+  html+='<span class="amt">'+amtDisplay+'</span>';
+  html+='<div class="meta"><div class="row1"><span class="st '+tx.status+'">'+tx.status+'</span> <span class="dir-tag '+dirTagClass+'">'+dirLabel+'</span>'+(tx.timing?' <span style="font-size:11px;color:var(--cyan);font-family:var(--mono)">'+tx.timing+'ms</span>':'')+'</div>';
+  html+='<div class="row2">'+(isSender?'To: '+tx.cn:'From: '+tx.dn)+' · '+(tx.rm||'—')+'</div></div>';
+  html+='<span class="chevron">▸</span></div>';
+  html+='<div class="tc-det" id="'+did+'">';
+
+  if(isSender){
+    html+='<div class="r"><span class="l">Debtor</span><span class="v">'+tx.dn+'</span></div>';
+    html+='<div class="r"><span class="l">SA ID (NIDN)</span><span class="v">'+tx.di+'</span></div>';
+    html+='<div class="r"><span class="l">Timestamp</span><span class="v">'+(tx.createdAt?new Date(tx.createdAt).toLocaleString():'')+'</span></div>';
+    html+='<div class="r"><span class="l">Debtor Account</span><span class="v">'+tx.da+'</span></div>';
+    html+='<div class="r"><span class="l">Creditor</span><span class="v">'+tx.cn+'</span></div>';
+    html+='<div class="r"><span class="l">Creditor Account</span><span class="v">'+tx.ca+'</span></div>';
+    html+='<div class="r"><span class="l">Payment Reference</span><span class="v">'+(tx.rm||'—')+'</span></div>';
+  }else{
+    html+='<div class="r"><span class="l">Sender Name</span><span class="v">'+tx.dn+'</span></div>';
+    html+='<div class="r"><span class="l">Sender SA ID (NIDN)</span><span class="v">'+tx.di+'</span></div>';
+    html+='<div class="r"><span class="l">Timestamp</span><span class="v">'+(tx.createdAt?new Date(tx.createdAt).toLocaleString():'')+'</span></div>';
+    html+='<div class="r"><span class="l">Sender Account</span><span class="v">'+tx.da+'</span></div>';
+    html+='<div class="r"><span class="l">Sender Bank</span><span class="v">'+tx.dbName+' ('+tx.db+')</span></div>';
+    html+='<div class="r"><span class="l">Recipient Name</span><span class="v">'+tx.cn+'</span></div>';
+    html+='<div class="r"><span class="l">Recipient Account</span><span class="v">'+tx.ca+'</span></div>';
+    html+='<div class="r"><span class="l">Payment Reference</span><span class="v">'+(tx.rm||'—')+'</span></div>';
+    if(tx.feeApplicable){
+      html+='<div class="fr"><span class="fl">Fee (excl VAT)</span><span class="v">R'+tx.feeAmt+'</span></div>';
+      html+='<div class="fr"><span class="fl">VAT (15%)</span><span class="v">R'+tx.feeTax+'</span></div>';
+      html+='<div class="fr"><span class="fl">Total fee payable</span><span class="v">R'+(parseFloat(tx.feeAmt)+parseFloat(tx.feeTax)).toFixed(2)+'</span></div>';
+    }
+  }
+  html+='<div class="r"><span class="l">InstrId</span><span class="v">'+tx.instrId+'</span></div>';
+  html+='<div class="r"><span class="l">EndToEndId</span><span class="v">'+tx.e2eId+'</span></div>';
+  if(tx.stateId) html+='<div class="r"><span class="l">Corda StateId</span><span class="v">'+tx.stateId+'</span></div>';
+  html+='<span class="xt" onclick="event.stopPropagation();togXml(\''+x1+'\')">▸ pacs.008</span><div class="xb" id="'+x1+'">'+esc(tx.pacs008)+'</div>';
+  if(tx.pacs002) html+='<span class="xt" onclick="event.stopPropagation();togXml(\''+x2+'\')">▸ pacs.002</span><div class="xb" id="'+x2+'">'+esc(tx.pacs002)+'</div>';
+  if(tx.tl&&tx.tl.length) html+='<div class="tl">'+tlHtml(tx.tl)+'</div>';
+  html+='</div></div>';
+  return html;
+}
+
 function renderBank(bk){
-  const isBlue=bk==='blue';
-  const listEl=$(isBlue?'aList':'bList'),empEl=$(isBlue?'eA':'eB');
-  const mine=getTxsForBank(bk);
-  if(!mine.length){listEl.innerHTML='';empEl.style.display='flex';return;}
+  var isBlue=bk==='blue';
+  var listEl=$(isBlue?'aList':'bList'),empEl=$(isBlue?'eA':'eB');
+  var outEl=$(isBlue?'aOutList':'bOutList'),inEl=$(isBlue?'aInList':'bInList');
+  var mine=getTxsForBank(bk);
+  if(!mine.length){listEl.innerHTML='';empEl.style.display='flex';outEl.innerHTML='<div class="empty" style="height:100%">No outgoing</div>';inEl.innerHTML='<div class="empty" style="height:100%">No incoming</div>';updateLedgerNet(bk,[],[]);return;}
   empEl.style.display='none';
 
-  listEl.innerHTML=mine.map(tx=>{
-    // In live mode, determine direction from branch codes
-    const isSender=tx.senderKey===bk || tx.db===BANKS[bk].branch;
-    const did='d'+bk+tx.id,x1='x8'+bk+tx.id,x2='x2'+bk+tx.id;
-    const dir=isSender?'SENT':'RECEIVED';
-    const dirC=isSender?'var(--blue)':'var(--green)';
+  var sent=[],recv=[];
+  mine.forEach(function(tx){
+    var isSender=tx.senderKey===bk || tx.db===BANKS[bk].branch;
+    if(isSender) sent.push(tx); else recv.push(tx);
+  });
 
-    let html=`<div class="tc fresh">
-      <div class="tc-sum" onclick="togDet('${did}')">
-        <span class="amt">R${fmtAmt(tx.amount)}</span>
-        <div class="meta">
-          <div class="row1"><span class="st ${tx.status}">${tx.status}</span> <span style="color:${dirC};font-weight:600;font-size:12px">${dir}</span>${tx.timing?` <span style="font-size:11px;color:var(--cyan);font-family:var(--mono)">${tx.timing}ms</span>`:''}</div>
-          <div class="row2">${isSender?'To: '+tx.cn:'From: '+tx.dn} · ${tx.rm||'—'}</div>
-        </div>
-        <span class="chevron">▸</span>
-      </div>
-      <div class="tc-det" id="${did}">`;
-
-    if(isSender){
-      html+=`<div class="r"><span class="l">Debtor</span><span class="v">${tx.dn}</span></div>
-        <div class="r"><span class="l">SA ID (NIDN)</span><span class="v">${tx.di}</span></div>
-        <div class="r"><span class="l">Timestamp</span><span class="v">${tx.createdAt?new Date(tx.createdAt).toLocaleString():''}</span></div>
-        <div class="r"><span class="l">Debtor Account</span><span class="v">${tx.da}</span></div>
-        <div class="r"><span class="l">Creditor</span><span class="v">${tx.cn}</span></div>
-        <div class="r"><span class="l">Creditor Account</span><span class="v">${tx.ca}</span></div>
-        <div class="r"><span class="l">Payment Reference</span><span class="v">${tx.rm||'—'}</span></div>`;
-    }else{
-      html+=`<div class="r"><span class="l">Sender Name</span><span class="v">${tx.dn}</span></div>
-        <div class="r"><span class="l">Sender SA ID (NIDN)</span><span class="v">${tx.di}</span></div>
-        <div class="r"><span class="l">Timestamp</span><span class="v">${tx.createdAt?new Date(tx.createdAt).toLocaleString():''}</span></div>
-        <div class="r"><span class="l">Sender Account</span><span class="v">${tx.da}</span></div>
-        <div class="r"><span class="l">Sender Bank</span><span class="v">${tx.dbName} (${tx.db})</span></div>
-        <div class="r"><span class="l">Recipient Name</span><span class="v">${tx.cn}</span></div>
-        <div class="r"><span class="l">Recipient Account</span><span class="v">${tx.ca}</span></div>
-        <div class="r"><span class="l">Payment Reference</span><span class="v">${tx.rm||'—'}</span></div>`;
-      if(tx.feeApplicable){
-        html+=`<div class="fr"><span class="fl">Fee (excl VAT)</span><span class="v">R${tx.feeAmt}</span></div>
-        <div class="fr"><span class="fl">VAT (15%)</span><span class="v">R${tx.feeTax}</span></div>
-        <div class="fr"><span class="fl">Total fee payable</span><span class="v">R${(parseFloat(tx.feeAmt)+parseFloat(tx.feeTax)).toFixed(2)}</span></div>`;
-      }
-    }
-    html+=`<div class="r"><span class="l">InstrId</span><span class="v">${tx.instrId}</span></div>
-        <div class="r"><span class="l">EndToEndId</span><span class="v">${tx.e2eId}</span></div>
-        ${tx.stateId?`<div class="r"><span class="l">Corda StateId</span><span class="v">${tx.stateId}</span></div>`:''}
-        <span class="xt" onclick="event.stopPropagation();togXml('${x1}')">▸ pacs.008</span><div class="xb" id="${x1}">${esc(tx.pacs008)}</div>
-        ${tx.pacs002?`<span class="xt" onclick="event.stopPropagation();togXml('${x2}')">▸ pacs.002</span><div class="xb" id="${x2}">${esc(tx.pacs002)}</div>`:''}
-        ${tx.tl&&tx.tl.length?`<div class="tl">${tlHtml(tx.tl)}</div>`:''}
-      </div></div>`;
-    return html;
+  // Normal view (all in one list)
+  listEl.innerHTML=mine.map(function(tx){
+    var isSender=tx.senderKey===bk || tx.db===BANKS[bk].branch;
+    return renderBankCard(tx,bk,isSender);
   }).join('');
+
+  // Fullscreen ledger columns
+  outEl.innerHTML=sent.length?sent.map(function(tx){return renderBankCard(tx,bk,true);}).join(''):'<div class="empty" style="height:100%">No outgoing</div>';
+  inEl.innerHTML=recv.length?recv.map(function(tx){return renderBankCard(tx,bk,false);}).join(''):'<div class="empty" style="height:100%">No incoming</div>';
+
+  updateLedgerNet(bk,sent,recv);
+}
+
+function updateLedgerNet(bk,sent,recv){
+  var isBlue=bk==='blue';
+  var totalOut=0,totalIn=0;
+  sent.forEach(function(tx){totalOut+=parseFloat(tx.amount)||0;});
+  recv.forEach(function(tx){totalIn+=parseFloat(tx.amount)||0;});
+  var net=totalIn-totalOut;
+  $(isBlue?'lnOutBlue':'lnOutTurq').textContent='(R'+fmtAmt(totalOut)+')';
+  $(isBlue?'lnInBlue':'lnInTurq').textContent='R'+fmtAmt(totalIn);
+  var netEl=$(isBlue?'lnNetBlue':'lnNetTurq');
+  netEl.textContent=net>=0?'R'+fmtAmt(net):'(R'+fmtAmt(Math.abs(net))+')';
+  netEl.style.color=net>=0?'#6ee7b7':'#fca5a5';
 }
 
 // ============================================================================
-// PAYFI CONTROL TOWER — aggregates from both bank vnodes (no own vnode)
+// PAYFI CONTROL TOWER
 // ============================================================================
 function renderPF(){
-  const el=$('pfList'),strip=$('pfStrip'),emp=$('ePF');
-  const txs=getTxsForPF();
+  var el=$('pfList'),strip=$('pfStrip'),emp=$('ePF');
+  var txs=getTxsForPF();
   if(!txs.length){el.innerHTML='';strip.innerHTML='';emp.style.display='flex';return;}
   emp.style.display='none';
 
-  let cleared=0,rejected=0,vol=0,fees=0,tax=0,latSum=0,latN=0,bluePaysTurq=0,turqPaysBlue=0;
-  txs.forEach(tx=>{
-    if(tx.status==='CLEARED'||tx.status==='SUBMITTED'){cleared++;const a=parseFloat(tx.amount);vol+=a;
+  var cleared=0,rejected=0,vol=0,fees=0,tax=0,latSum=0,latN=0,bluePaysTurq=0,turqPaysBlue=0;
+  txs.forEach(function(tx){
+    if(tx.status==='CLEARED'||tx.status==='SUBMITTED'){cleared++;var a=parseFloat(tx.amount);vol+=a;
       if(tx.feeApplicable){fees+=parseFloat(tx.feeAmt);tax+=parseFloat(tx.feeTax);}
       if(tx.timing){latSum+=parseFloat(tx.timing);latN++;}
       if(tx.db==='100001'&&tx.cb==='200002')bluePaysTurq+=a;
       else if(tx.db==='200002'&&tx.cb==='100001')turqPaysBlue+=a;}
     if(tx.status==='REJECTED')rejected++;
   });
-  const avgLat=latN?Math.round(latSum/latN):0;
-  const net=bluePaysTurq-turqPaysBlue;
-  const netDir=net>0?'Bank Blue owes Bank Turquoise':net<0?'Bank Turquoise owes Bank Blue':'Balanced';
-  const nc=net===0?'var(--green)':'var(--cyan)';
+  var avgLat=latN?Math.round(latSum/latN):0;
+  var net=bluePaysTurq-turqPaysBlue;
+  var netDir=net>0?'Bank Blue owes Bank Turquoise':net<0?'Bank Turquoise owes Bank Blue':'Balanced';
+  var nc=net===0?'var(--green)':'var(--cyan)';
+  var btFmt=bluePaysTurq<=turqPaysBlue&&bluePaysTurq>0?'(R'+fmtAmt(bluePaysTurq)+')':'R'+fmtAmt(bluePaysTurq);
+  var tbFmt=turqPaysBlue<bluePaysTurq&&turqPaysBlue>0?'(R'+fmtAmt(turqPaysBlue)+')':'R'+fmtAmt(turqPaysBlue);
+  if(bluePaysTurq===0)btFmt='R0.00';if(turqPaysBlue===0)tbFmt='R0.00';
 
-  strip.innerHTML=`<div class="so-strip">
-    <div class="so-kpi"><div class="kv">${cleared}</div><div class="kl">Cleared</div></div>
-    <div class="so-kpi"><div class="kv ${rejected>0?'err':''}">${rejected}</div><div class="kl">Rejected</div></div>
-    <div class="so-kpi"><div class="kv">${avgLat}ms</div><div class="kl">Avg Latency</div></div>
-    <div class="so-kpi"><div class="kv warn">R${(fees+tax).toFixed(2)}</div><div class="kl">Revenue</div></div>
-  </div>
-  <div class="so-strip">
-    <div class="so-kpi"><div class="kv">R${fmtAmt(vol)}</div><div class="kl">Gross Volume</div></div>
-    <div class="so-kpi"><div class="kv">R${fees.toFixed(2)}</div><div class="kl">Fees (ex VAT)</div></div>
-    <div class="so-kpi"><div class="kv">R${tax.toFixed(2)}</div><div class="kl">VAT</div></div>
-    <div class="so-kpi"><div class="kv">${txs.length}</div><div class="kl">Total Msgs</div></div>
-  </div>
-  <div class="tc" style="border-left:3px solid var(--cyan)">
-    <div style="padding:10px 14px">
-      <div style="font-size:13px;font-weight:600;color:var(--cyan);margin-bottom:6px">Bilateral Net Clearing Position</div>
-      <div class="r"><span class="l">Bank Blue → Bank Turquoise</span><span class="v">R${fmtAmt(bluePaysTurq)}</span></div>
-      <div class="r"><span class="l">Bank Turquoise → Bank Blue</span><span class="v">R${fmtAmt(turqPaysBlue)}</span></div>
-      <div class="r" style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px"><span class="l" style="font-weight:700">Net Settlement</span><span class="v" style="font-size:17px;font-weight:700;color:${nc}">R${fmtAmt(Math.abs(net))}</span></div>
-      <div class="r"><span class="l">Direction</span><span class="v" style="color:${nc}">${netDir}</span></div>
-      <div class="r"><span class="l">Settlement</span><span class="v" style="color:var(--t3)">SAMOS (off-ledger)</span></div>
-    </div>
-  </div>`;
+  strip.innerHTML='<div class="so-strip"><div class="so-kpi"><div class="kv">'+cleared+'</div><div class="kl">Cleared</div></div><div class="so-kpi"><div class="kv '+(rejected>0?'err':'')+'">'+rejected+'</div><div class="kl">Rejected</div></div><div class="so-kpi"><div class="kv">'+avgLat+'ms</div><div class="kl">Avg Latency</div></div><div class="so-kpi"><div class="kv warn">R'+(fees+tax).toFixed(2)+'</div><div class="kl">Revenue</div></div></div><div class="so-strip"><div class="so-kpi"><div class="kv">R'+fmtAmt(vol)+'</div><div class="kl">Gross Volume</div></div><div class="so-kpi"><div class="kv">R'+fees.toFixed(2)+'</div><div class="kl">Fees (ex VAT)</div></div><div class="so-kpi"><div class="kv">R'+tax.toFixed(2)+'</div><div class="kl">VAT</div></div><div class="so-kpi"><div class="kv">'+txs.length+'</div><div class="kl">Total Msgs</div></div></div><div class="tc" style="border-left:3px solid var(--cyan)"><div style="padding:10px 14px"><div style="font-size:13px;font-weight:600;color:var(--cyan);margin-bottom:6px">Bilateral Net Clearing Position</div><div class="r"><span class="l">Bank Blue → Bank Turquoise</span><span class="v">'+btFmt+'</span></div><div class="r"><span class="l">Bank Turquoise → Bank Blue</span><span class="v">'+tbFmt+'</span></div><div class="r" style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px"><span class="l" style="font-weight:700">Net Clearing</span><span class="v" style="font-size:17px;font-weight:700;color:'+nc+'">R'+fmtAmt(Math.abs(net))+'</span></div><div class="r"><span class="l">Direction</span><span class="v" style="color:'+nc+'">'+netDir+'</span></div><div class="r"><span class="l">Settlement</span><span class="v" style="color:var(--t3)">SAMOS (off-ledger)</span></div></div></div>';
 
-  el.innerHTML=txs.map(tx=>{
-    const did='dpf'+tx.id;
-    return`<div class="tc">
-      <div class="tc-sum" onclick="togDet('${did}')">
-        <span class="amt">R${fmtAmt(tx.amount)}</span>
-        <div class="meta"><div class="row1"><span class="st ${tx.status}">${tx.status}</span></div><div class="row2">${tx.dbName} → ${tx.cbName}</div></div>
-        <span class="chevron">▸</span>
-      </div>
-      <div class="tc-det" id="${did}">
-        <div class="r"><span class="l">MsgId</span><span class="v">${tx.msgId}</span></div>
-        <div class="r"><span class="l">InstrId</span><span class="v">${tx.instrId}</span></div>
-        <div class="r"><span class="l">EndToEndId</span><span class="v">${tx.e2eId}</span></div>
-        <div class="r"><span class="l">TxId</span><span class="v">${tx.txId}</span></div>
-        ${tx.stateId?`<div class="r"><span class="l">Corda StateId</span><span class="v">${tx.stateId}</span></div>`:''}
-        <div class="r"><span class="l">Route</span><span class="v">${tx.dbName} (${tx.db}) → ${tx.cbName} (${tx.cb})</span></div>
-        <div class="r"><span class="l">Debtor/Creditor PII</span><span class="redact">Not visible to System Operator</span></div>
-        <div class="r"><span class="l">SARB Copy</span><span class="v">${flag(tx.sarbCopied)}</span></div>
-        ${tx.feeApplicable?`<div class="fr"><span class="fl">Fee</span><span class="v">R${tx.feeAmt} + R${tx.feeTax} VAT</span></div><div class="fr"><span class="fl">Fee Payer</span><span class="v">${tx.cbName}</span></div>`:''}
-      </div>
-    </div>`;
+  el.innerHTML=txs.map(function(tx){
+    var did='dpf'+tx.id;
+    return'<div class="tc"><div class="tc-sum" onclick="togDet(\''+did+'\')"><span class="amt" style="color:var(--green)">R'+fmtAmt(tx.amount)+'</span><div class="meta"><div class="row1"><span class="st '+tx.status+'">'+tx.status+'</span></div><div class="row2">'+tx.dbName+' → '+tx.cbName+'</div></div><span class="chevron">▸</span></div><div class="tc-det" id="'+did+'"><div class="r"><span class="l">MsgId</span><span class="v">'+tx.msgId+'</span></div><div class="r"><span class="l">InstrId</span><span class="v">'+tx.instrId+'</span></div><div class="r"><span class="l">EndToEndId</span><span class="v">'+tx.e2eId+'</span></div><div class="r"><span class="l">TxId</span><span class="v">'+tx.txId+'</span></div>'+(tx.stateId?'<div class="r"><span class="l">Corda StateId</span><span class="v">'+tx.stateId+'</span></div>':'')+'<div class="r"><span class="l">Route</span><span class="v">'+tx.dbName+' ('+tx.db+') → '+tx.cbName+' ('+tx.cb+')</span></div><div class="r"><span class="l">Debtor/Creditor PII</span><span class="redact">Not visible to System Operator</span></div><div class="r"><span class="l">SARB Copy</span><span class="v">'+flag(tx.sarbCopied)+'</span></div>'+(tx.feeApplicable?'<div class="fr"><span class="fl">Fee</span><span class="v">R'+tx.feeAmt+' + R'+tx.feeTax+' VAT</span></div><div class="fr"><span class="fl">Fee Payer</span><span class="v">'+tx.cbName+'</span></div>':'')+'</div></div>';
   }).join('');
 }
 
 // ============================================================================
-// SARB — queries its own vnode vault, sees everything
+// SARB
 // ============================================================================
 function renderS(){
-  const el=$('sList'),emp=$('eS');
-  const txs=getTxsForSARB();
+  var el=$('sList'),emp=$('eS');
+  var txs=getTxsForSARB();
   if(!txs.length){el.innerHTML='';emp.style.display='flex';return;}
   emp.style.display='none';
 
-  const hdr=`<div class="tc" style="border-left:3px solid var(--green)">
-    <div style="padding:10px 14px">
-      <div class="r"><span class="l">Regulatory Access Level</span><span class="v" style="color:var(--green)">FULL — FICA + Fees + XML</span></div>
-      <div class="r"><span class="l">Transactions Observed</span><span class="v">${txs.length}</span></div>
-    </div>
-  </div>`;
+  var hdr='<div class="tc" style="border-left:3px solid var(--green)"><div style="padding:10px 14px"><div class="r"><span class="l">Regulatory Access Level</span><span class="v" style="color:var(--green)">FULL — FICA + Fees + XML</span></div><div class="r"><span class="l">Transactions Observed</span><span class="v">'+txs.length+'</span></div></div></div>';
 
-  el.innerHTML=hdr+txs.map(tx=>{
-    const did='ds'+tx.id,x1='xs8'+tx.id,x2='xs2'+tx.id;
-    return`<div class="tc">
-      <div class="tc-sum" onclick="togDet('${did}')">
-        <span class="amt">R${fmtAmt(tx.amount)}</span>
-        <div class="meta"><div class="row1"><span class="st ${tx.status}">${tx.status}</span>${tx.pacs002Code?` <span class="st ${tx.pacs002Code}">${tx.pacs002Code}</span>`:''}</div><div class="row2">${tx.dn} → ${tx.cn}</div></div>
-        <span class="chevron">▸</span>
-      </div>
-      <div class="tc-det" id="${did}">
-        <div class="r"><span class="l">MsgId</span><span class="v">${tx.msgId}</span></div>
-        <div class="r"><span class="l">InstrId / E2E / TxId</span><span class="v">${tx.instrId} · ${tx.e2eId} · ${tx.txId}</span></div>
-        ${tx.stateId?`<div class="r"><span class="l">Corda State</span><span class="v">${tx.stateId}</span></div>`:''}
-        <div class="r"><span class="l">Debtor</span><span class="v">${tx.dn}</span></div>
-        <div class="r"><span class="l">Debtor SA ID</span><span class="v">${tx.di}</span></div>
-        <div class="r"><span class="l">Debtor Account</span><span class="v">${tx.da}</span></div>
-        <div class="r"><span class="l">Debtor Bank</span><span class="v">${tx.dbName} (${tx.db})</span></div>
-        <div class="r"><span class="l">Creditor</span><span class="v">${tx.cn}</span></div>
-        <div class="r"><span class="l">Creditor Account</span><span class="v">${tx.ca}</span></div>
-        <div class="r"><span class="l">Creditor Bank</span><span class="v">${tx.cbName} (${tx.cb})</span></div>
-        <div class="r"><span class="l">Payment Reference</span><span class="v">${tx.rm||'—'}</span></div>
-        ${tx.feeApplicable?`<div class="fr"><span class="fl">Fee</span><span class="v">R${tx.feeAmt} + R${tx.feeTax} VAT = R${(parseFloat(tx.feeAmt)+parseFloat(tx.feeTax)).toFixed(2)}</span></div>
-        <div class="fr"><span class="fl">Payer</span><span class="v">${tx.cbName}</span></div>`:`<div class="fr"><span class="fl">Fee</span><span class="v" style="color:var(--t3)">N/A</span></div>`}
-        <span class="xt" onclick="event.stopPropagation();togXml('${x1}')">▸ pacs.008 XML</span><div class="xb" id="${x1}">${esc(tx.pacs008)}</div>
-        ${tx.pacs002?`<span class="xt" onclick="event.stopPropagation();togXml('${x2}')">▸ pacs.002 XML</span><div class="xb" id="${x2}">${esc(tx.pacs002)}</div>`:''}
-      </div>
-    </div>`;
+  el.innerHTML=hdr+txs.map(function(tx){
+    var did='ds'+tx.id,x1='xs8'+tx.id,x2='xs2'+tx.id;
+    return'<div class="tc"><div class="tc-sum" onclick="togDet(\''+did+'\')"><span class="amt" style="color:var(--green)">R'+fmtAmt(tx.amount)+'</span><div class="meta"><div class="row1"><span class="st '+tx.status+'">'+tx.status+'</span>'+(tx.pacs002Code?' <span class="st '+tx.pacs002Code+'">'+tx.pacs002Code+'</span>':'')+'</div><div class="row2">'+tx.dn+' → '+tx.cn+'</div></div><span class="chevron">▸</span></div><div class="tc-det" id="'+did+'"><div class="r"><span class="l">MsgId</span><span class="v">'+tx.msgId+'</span></div><div class="r"><span class="l">InstrId / E2E / TxId</span><span class="v">'+tx.instrId+' · '+tx.e2eId+' · '+tx.txId+'</span></div>'+(tx.stateId?'<div class="r"><span class="l">Corda State</span><span class="v">'+tx.stateId+'</span></div>':'')+'<div class="r"><span class="l">Debtor</span><span class="v">'+tx.dn+'</span></div><div class="r"><span class="l">Debtor SA ID</span><span class="v">'+tx.di+'</span></div><div class="r"><span class="l">Debtor Account</span><span class="v">'+tx.da+'</span></div><div class="r"><span class="l">Debtor Bank</span><span class="v">'+tx.dbName+' ('+tx.db+')</span></div><div class="r"><span class="l">Creditor</span><span class="v">'+tx.cn+'</span></div><div class="r"><span class="l">Creditor Account</span><span class="v">'+tx.ca+'</span></div><div class="r"><span class="l">Creditor Bank</span><span class="v">'+tx.cbName+' ('+tx.cb+')</span></div><div class="r"><span class="l">Payment Reference</span><span class="v">'+(tx.rm||'—')+'</span></div>'+(tx.feeApplicable?'<div class="fr"><span class="fl">Fee</span><span class="v">R'+tx.feeAmt+' + R'+tx.feeTax+' VAT = R'+(parseFloat(tx.feeAmt)+parseFloat(tx.feeTax)).toFixed(2)+'</span></div><div class="fr"><span class="fl">Payer</span><span class="v">'+tx.cbName+'</span></div>':'<div class="fr"><span class="fl">Fee</span><span class="v" style="color:var(--t3)">N/A</span></div>')+'<span class="xt" onclick="event.stopPropagation();togXml(\''+x1+'\')">▸ pacs.008 XML</span><div class="xb" id="'+x1+'">'+esc(tx.pacs008)+'</div>'+(tx.pacs002?'<span class="xt" onclick="event.stopPropagation();togXml(\''+x2+'\')">▸ pacs.002 XML</span><div class="xb" id="'+x2+'">'+esc(tx.pacs002)+'</div>':'')+'</div></div>';
   }).join('');
 }
 
