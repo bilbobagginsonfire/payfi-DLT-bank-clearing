@@ -449,7 +449,7 @@ async function submitModalPayment(){
       const startRes=await startFlow(sender.hash,SUBMIT_FLOW,{pacs008Xml:pacs008},rid);
       if(startRes.error){statusMsg='API Error: '+startRes.error;}
       else{
-        const res=await pollFlowResult(sender.hash,rid,40,2500);
+        const res=await pollFlowResult(sender.hash,rid,60,1000);
         if(res.flowStatus==='COMPLETED'){statusMsg='Payment cleared';}
         else if(res.flowStatus==='FAILED'){
           const em=res.flowError?(typeof res.flowError==='object'?res.flowError.message||JSON.stringify(res.flowError):String(res.flowError)):'Unknown error';
@@ -550,13 +550,13 @@ async function netSettle(){
   try{
     const rid='settle-'+Date.now();
     await startFlow(BANKS.blue.hash,SETTLE_FLOW,{},rid);
-    const res=await pollFlowResult(BANKS.blue.hash,rid,40,2500);
+    const res=await pollFlowResult(BANKS.blue.hash,rid,60,1000);
     if(res.flowStatus==='COMPLETED'){
       const r=JSON.parse(res.flowResult);
       $('lastT').textContent=r.message||'Settled';
       const srid='sarb-settle-'+Date.now();
       await startFlow(C.sarbHash,SARB_SETTLE_FLOW,{},srid);
-      await pollFlowResult(C.sarbHash,srid,20,2000);
+      await pollFlowResult(C.sarbHash,srid,30,1000);
     }else{
       $('lastT').textContent='Settlement failed: '+(res.flowError?res.flowError.message:'unknown');
     }
@@ -587,9 +587,9 @@ async function startFlow(hash,flowClass,requestBody,rid){
 }
 
 async function pollFlowResult(hash,rid,maxAttempts,interval){
-  maxAttempts=maxAttempts||40;interval=interval||2500;
+  maxAttempts=maxAttempts||40;interval=interval||1000;
   for(var i=0;i<maxAttempts;i++){
-    await dly(interval);
+    await dly(i===0?500:interval);
     try{
       var d=await apiGet(C.apiBase+'/flow/'+hash+'/'+rid);
       if(!d) continue;
@@ -617,7 +617,7 @@ async function runFlow(hash,flowClass,body,maxAttempts,interval){
 async function queryVnode(key){
   var hash=key==='sarb'?C.sarbHash:BANKS[key].hash;
   var flow=key==='sarb'?SARB_QUERY_FLOW:QUERY_FLOW;
-  var result=await runFlow(hash,flow,{},12,1500);
+  var result=await runFlow(hash,flow,{},15,1000);
   if(Array.isArray(result)){
     vnodeData[key]=result.map(mapApiState);
   }
