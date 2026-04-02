@@ -217,3 +217,80 @@ data class ParticipantStatusRecord(
     @Column(name = "reinstated_at", nullable = true)
     val reinstatedAt: Instant? = null
 )
+
+
+@CordaSerializable
+@Entity
+@Table(name = "sarb_transaction_records")
+data class SarbTransactionRecord(
+    @Id
+    @Column(name = "id")
+    val id: UUID = UUID.randomUUID(),
+
+    @Column(name = "state_id", nullable = false)
+    val stateId: String,
+
+    @Column(name = "instruction_id", nullable = false)
+    val instructionId: String,
+
+    @Column(name = "end_to_end_id", nullable = false)
+    val endToEndId: String,
+
+    @Column(name = "transaction_id", nullable = false)
+    val transactionId: String,
+
+    @Column(name = "amount", nullable = false)
+    val amount: String,
+
+    @Column(name = "currency", nullable = false)
+    val currency: String,
+
+    @Column(name = "debtor_name", nullable = false)
+    val debtorName: String,
+
+    @Column(name = "debtor_id_number")
+    val debtorIdNumber: String? = null,
+
+    @Column(name = "debtor_id_type")
+    val debtorIdType: String? = null,
+
+    @Column(name = "debtor_account", nullable = false)
+    val debtorAccount: String,
+
+    @Column(name = "debtor_agent_branch_code", nullable = false)
+    val debtorAgentBranchCode: String,
+
+    @Column(name = "creditor_name", nullable = false)
+    val creditorName: String,
+
+    @Column(name = "creditor_account", nullable = false)
+    val creditorAccount: String,
+
+    @Column(name = "creditor_agent_branch_code", nullable = false)
+    val creditorAgentBranchCode: String,
+
+    @Column(name = "status", nullable = false)
+    val status: String,
+
+    @Column(name = "fee_applicable", nullable = false)
+    val feeApplicable: Boolean,
+
+    @Column(name = "fee_amount", nullable = false)
+    val feeAmount: String,
+
+    @Column(name = "fee_tax_amount")
+    val feeTaxAmount: String? = null,
+
+    @Column(name = "settlement_date", nullable = false)
+    val settlementDate: String,
+
+    @Column(name = "received_at", nullable = false)
+    val receivedAt: java.time.Instant = java.time.Instant.now(),
+
+    @Column(name = "remittance_info")
+    val remittanceInfo: String? = null,
+
+    @Column(name = "settled", nullable = false)
+    val settled: Boolean = false
+)
+

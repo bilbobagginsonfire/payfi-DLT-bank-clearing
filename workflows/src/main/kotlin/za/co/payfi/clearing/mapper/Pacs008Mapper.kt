@@ -337,7 +337,7 @@ class Pacs008Mapper {
             feeApplicable = feeApplicable,
             feeAmount = feeAmount,
             feeTaxAmount = feeTaxAmount,
-            feePayerBranchCode = creditorAgentBranchCode,
+            feePayerBranchCode = debtorAgentBranchCode,
             participantKeys = participantKeys
         )
     }

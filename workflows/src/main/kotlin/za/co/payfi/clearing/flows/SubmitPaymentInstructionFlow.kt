@@ -32,23 +32,14 @@ import java.util.UUID
  * and finalises peer-to-peer with the counterparty bank.
  *
  * SARB observer receives finalised transaction data via separate session.send()
- * AFTER finality — NOT as a participant or signatory.
+ * AFTER finality — NOT as a participant or signatory. The SARB responder
+ * persists the DTO to sarb_transaction_records for regulatory visibility.
  *
- * Processing steps per transaction:
- * 1. Parse XML → List<PaymentInstructionState>
- * 2. Extract + store message envelope metadata off-ledger
- * 3. For each transaction:
- *    a. Check idempotency (vault query for MsgId + InstrId) — replay cached response if hit
- *    b. Check participant suspension (derived from X500 org name — demo only)
- *    c. Fee already calculated by mapper using PilotFeeConstants
- *    d. Resolve counterparty via X500 org-based branch code mapping (skip if same-bank)
- *    e. Build participant keys (debtor + creditor banks only, NOT SARB)
- *    f. Build UTXO transaction (Submit command, 60s time window, notary)
- *    g. Sign + finalise with counterparty session (SARB excluded from finality)
- *    h. Send transaction summary DTO to SARB observer via separate session
- *    i. Record idempotency key with pacs.002 response payload for exact replay
- *    j. Record fee accrual if applicable
- * 4. Return consolidated pacs.002 response (includes replayed idempotent results)
+ * Phase 0 additions:
+ * - Participant suspension enforcement (check before processing)
+ * - Fee payer correction (debtor bank pays for EFT credits)
+ * - Extended SarbNotificationDto with full FICA fields
+ * - SARB responder persistence to sarb_transaction_records
  */
 @InitiatingFlow(protocol = "submit-payment-instruction")
 class SubmitPaymentInstructionFlow : ClientStartableFlow {
@@ -82,7 +73,7 @@ class SubmitPaymentInstructionFlow : ClientStartableFlow {
 
     /**
      * DTO sent to SARB observer after finality.
-     * Must be @CordaSerializable — NOT a Prowide object.
+     * Extended with full FICA fields for regulatory compliance.
      */
     @CordaSerializable
     data class SarbNotificationDto(
@@ -93,6 +84,8 @@ class SubmitPaymentInstructionFlow : ClientStartableFlow {
         val amount: String,
         val currency: String,
         val debtorName: String,
+        val debtorIdNumber: String? = null,
+        val debtorIdType: String? = null,
         val debtorAccount: String,
         val debtorAgentBranchCode: String,
         val creditorName: String,
@@ -101,7 +94,9 @@ class SubmitPaymentInstructionFlow : ClientStartableFlow {
         val status: String,
         val feeApplicable: Boolean,
         val feeAmount: String,
-        val settlementDate: String
+        val feeTaxAmount: String? = null,
+        val settlementDate: String,
+        val remittanceInfo: String? = null
     )
 
     @Suspendable
@@ -110,6 +105,21 @@ class SubmitPaymentInstructionFlow : ClientStartableFlow {
         val xml = input.pacs008Xml
         val myInfo = memberLookup.myInfo()
         val myBranchCode = getBranchCode(myInfo.name)
+
+        // =====================================================================
+        // PHASE 0: Check if THIS bank is suspended before doing anything
+        // =====================================================================
+        val myOrgSuspended = isParticipantSuspended(myBranchCode)
+        if (myOrgSuspended) {
+            return jsonMarshallingService.format(FlowOutput(
+                pacs002Xml = responseBuilder.buildRejection(
+                    "UNKNOWN", "", "", "",
+                    "AG01", "Submitting bank ($myBranchCode) is suspended"
+                ),
+                processedCount = 0, acceptedCount = 0,
+                rejectedCount = 1, skippedIdempotentCount = 0
+            ))
+        }
 
         // Step 1: Parse XML
         val states: List<PaymentInstructionState>
@@ -142,7 +152,6 @@ class SubmitPaymentInstructionFlow : ClientStartableFlow {
         for (state in states) {
 
             // Step 3a: IDEMPOTENCY CHECK
-            // Query vault for existing unconsumed state with same MsgId + InstrId
             val existingStates = ledgerService.findUnconsumedStatesByExactType(
                 PaymentInstructionState::class.java, 100, Instant.now()
             ).results
@@ -152,7 +161,6 @@ class SubmitPaymentInstructionFlow : ClientStartableFlow {
                 s.transactionId == state.transactionId
             }
 
-            // Also check off-ledger idempotency key
             val existingKey: IdempotencyKey? = try {
                 persistenceService.query(
                     "IdempotencyKey.findByCompositeKey",
@@ -168,17 +176,11 @@ class SubmitPaymentInstructionFlow : ClientStartableFlow {
             }
 
             if (isDuplicate || existingKey != null) {
-                // IDEMPOTENT REPLAY: return the cached pacs.002 result.
-                // If the off-ledger key exists, it contains the exact cached pacs.002 XML
-                // from the original acceptance. We use a synthetic TransactionResult here
-                // because the consolidated pacs.002 is rebuilt from all results; the
-                // per-transaction XML in responsePayload is stored for direct-replay
-                // scenarios at the REST/API layer.
                 results.add(Pacs002ResponseBuilder.TransactionResult(
                     originalInstructionId = state.instructionId,
                     originalEndToEndId = state.endToEndId,
                     originalTransactionId = state.transactionId,
-                    accepted = true, // cached key implies original was accepted
+                    accepted = true,
                     cachedResponsePayload = existingKey?.responsePayload
                 ))
                 skippedCount++
@@ -186,15 +188,26 @@ class SubmitPaymentInstructionFlow : ClientStartableFlow {
                 continue
             }
 
-            // Step 3b: Derive branch codes from X500 organisation
+            // =================================================================
+            // PHASE 0: Check if counterparty bank is suspended
+            // =================================================================
             val counterpartyBranchCode = if (state.debtorAgentBranchCode == myBranchCode) {
                 state.creditorAgentBranchCode
             } else {
                 state.debtorAgentBranchCode
             }
 
-            // Same-bank detection
             val isSameBank = state.debtorAgentBranchCode == state.creditorAgentBranchCode
+
+            if (!isSameBank && isParticipantSuspended(counterpartyBranchCode)) {
+                results.add(Pacs002ResponseBuilder.TransactionResult(
+                    state.instructionId, state.endToEndId, state.transactionId,
+                    accepted = false, rejectionReasonCode = "AG01",
+                    rejectionReasonDescription = "Counterparty bank ($counterpartyBranchCode) is suspended"
+                ))
+                rejectedCount++
+                continue
+            }
 
             // Resolve counterparty (skip if same-bank)
             val counterpartyMember: MemberX500Name? = if (isSameBank) {
@@ -266,6 +279,8 @@ class SubmitPaymentInstructionFlow : ClientStartableFlow {
                         amount = finalState.amount.toPlainString(),
                         currency = finalState.currency,
                         debtorName = finalState.debtorName,
+                        debtorIdNumber = finalState.debtorIdNumber,
+                        debtorIdType = finalState.debtorIdType.name,
                         debtorAccount = finalState.debtorAccount,
                         debtorAgentBranchCode = finalState.debtorAgentBranchCode,
                         creditorName = finalState.creditorName,
@@ -274,7 +289,9 @@ class SubmitPaymentInstructionFlow : ClientStartableFlow {
                         status = finalState.status.name,
                         feeApplicable = finalState.feeApplicable,
                         feeAmount = finalState.feeAmount.toPlainString(),
-                        settlementDate = finalState.settlementDate.toString()
+                        feeTaxAmount = finalState.feeTaxAmount.toPlainString(),
+                        settlementDate = finalState.settlementDate.toString(),
+                        remittanceInfo = finalState.remittanceInfo
                     )
                     sarbSession.send(dto)
                     sarbSession.close()
@@ -296,12 +313,14 @@ class SubmitPaymentInstructionFlow : ClientStartableFlow {
                 )
 
                 // Step 3j: Record fee accrual if applicable
+                // NOTE: creditorBankBranchCode field name is legacy — it now stores
+                // the fee PAYER's branch code (debtor bank for EFT credits)
                 if (finalState.feeApplicable) {
                     persistenceService.persist(
                         "persist-fee-${finalState.stateId}",
                         FeeAccrual(
                             stateId = finalState.stateId,
-                            creditorBankBranchCode = finalState.creditorAgentBranchCode,
+                            creditorBankBranchCode = finalState.feePayerBranchCode,
                             feeAmount = finalState.feeAmount,
                             taxAmount = finalState.feeTaxAmount,
                             totalAmount = finalState.feeAmount.add(finalState.feeTaxAmount),
@@ -347,23 +366,38 @@ class SubmitPaymentInstructionFlow : ClientStartableFlow {
     }
 
     // =========================================================================
-    // Helpers — branch code / role derived from X500 organisation (demo-only)
+    // SUSPENSION CHECK — queries off-ledger participant_status table
     // =========================================================================
 
     /**
-     * Demo-only workaround: derive branch code from X500 organisation name.
-     * In production, this would come from MGM-provided member metadata.
+     * Checks if a participant is suspended by querying the most recent
+     * ParticipantStatusRecord for the given branch code.
+     * Returns true if the latest record has status "SUSPENDED".
      */
+    @Suspendable
+    private fun isParticipantSuspended(branchCode: String): Boolean {
+        return try {
+            val records = persistenceService.findAll(ParticipantStatusRecord::class.java)
+                .execute()
+                .results
+                .filter { it.branchCode == branchCode }
+                .sortedByDescending { it.effectiveFrom }
+            val latest = records.firstOrNull() ?: return false
+            latest.status == "SUSPENDED"
+        } catch (e: Exception) {
+            log.warn("Failed to check suspension for $branchCode: ${e.message}")
+            false // fail-open for demo — fail-closed in production
+        }
+    }
+
+    // =========================================================================
+    // Helpers — branch code / role derived from X500 organisation (demo-only)
+    // =========================================================================
+
     private fun getBranchCode(memberName: MemberX500Name): String = when (memberName.organization) {
         "BankAlpha" -> "100001"
         "BankBeta" -> "200002"
         else -> throw CordaRuntimeException("Unknown bank: ${memberName.organization}")
-    }
-
-    private fun getRole(memberName: MemberX500Name): String = when (memberName.organization) {
-        "BankAlpha", "BankBeta" -> "PARTICIPANT"
-        "SARB" -> "REGULATOR_OBSERVER"
-        else -> "UNKNOWN"
     }
 
     @Suspendable
@@ -382,25 +416,64 @@ class SubmitPaymentInstructionFlow : ClientStartableFlow {
     }
 }
 
+// =============================================================================
+// RESPONDER — handles both bank finality AND SARB observer notification
+// =============================================================================
+
 /**
- * Responder flow for counterparty banks receiving payment instruction finality.
- * SARB observer uses a separate responder (SarbObserverResponderFlow).
+ * Responder flow for the submit-payment-instruction protocol.
+ *
+ * - Participant banks: receive finality and validate
+ * - SARB observer: receive DTO notification and persist to sarb_transaction_records
  */
 @InitiatedBy(protocol = "submit-payment-instruction")
 class PaymentInstructionResponderFlow : ResponderFlow {
 
+    private companion object {
+        val log = LoggerFactory.getLogger(PaymentInstructionResponderFlow::class.java)
+    }
+
     @CordaInject lateinit var ledgerService: UtxoLedgerService
     @CordaInject lateinit var memberLookup: MemberLookup
+    @CordaInject lateinit var persistenceService: PersistenceService
 
     @Suspendable
     override fun call(session: FlowSession) {
         val myOrg = memberLookup.myInfo().name.organization
 
         if (myOrg == "SARB") {
-            // SARB observer: receive the DTO notification (not finality)
+            // SARB observer: receive the DTO and persist to off-ledger table
             val dto = session.receive(SubmitPaymentInstructionFlow.SarbNotificationDto::class.java)
-            // Persist locally for regulatory visibility (off-ledger)
-            // In production, this would persist the DTO to a local audit table
+            try {
+                persistenceService.persist(
+                    "persist-sarb-${dto.stateId}",
+                    SarbTransactionRecord(
+                        stateId = dto.stateId,
+                        instructionId = dto.instructionId,
+                        endToEndId = dto.endToEndId,
+                        transactionId = dto.transactionId,
+                        amount = dto.amount,
+                        currency = dto.currency,
+                        debtorName = dto.debtorName,
+                        debtorIdNumber = dto.debtorIdNumber,
+                        debtorIdType = dto.debtorIdType,
+                        debtorAccount = dto.debtorAccount,
+                        debtorAgentBranchCode = dto.debtorAgentBranchCode,
+                        creditorName = dto.creditorName,
+                        creditorAccount = dto.creditorAccount,
+                        creditorAgentBranchCode = dto.creditorAgentBranchCode,
+                        status = dto.status,
+                        feeApplicable = dto.feeApplicable,
+                        feeAmount = dto.feeAmount,
+                        feeTaxAmount = dto.feeTaxAmount,
+                        settlementDate = dto.settlementDate,
+                        remittanceInfo = dto.remittanceInfo
+                    )
+                )
+                log.info("SARB: persisted transaction record for stateId=${dto.stateId}")
+            } catch (e: Exception) {
+                log.warn("SARB: failed to persist record for stateId=${dto.stateId}: ${e.message}")
+            }
             return
         }
 

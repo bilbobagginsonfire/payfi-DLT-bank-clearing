@@ -40,6 +40,7 @@ class PaymentInstructionContract : Contract {
         class RequestCancellation : PaymentCommand()
         class ResolveCancellation : PaymentCommand()
         class Return : PaymentCommand()
+        class Settle : PaymentCommand()
     }
 
     override fun verify(transaction: UtxoLedgerTransaction) {
@@ -63,6 +64,7 @@ class PaymentInstructionContract : Contract {
             is PaymentCommand.RequestCancellation -> verifyRequestCancellation(transaction)
             is PaymentCommand.ResolveCancellation -> verifyResolveCancellation(transaction)
             is PaymentCommand.Return -> verifyReturn(transaction)
+            is PaymentCommand.Settle -> verifySettle(transaction)
         }
     }
 
@@ -159,8 +161,8 @@ class PaymentInstructionContract : Contract {
             require(state.feeAmount.compareTo(BigDecimal.ZERO) == 0) { "Fee: feeAmount must be 0.00" }
             require(state.feeTaxAmount.compareTo(BigDecimal.ZERO) == 0) { "Fee: feeTaxAmount must be 0.00" }
         }
-        require(state.feePayerBranchCode == state.creditorAgentBranchCode) {
-            "Fee: feePayerBranchCode must equal creditorAgentBranchCode"
+        require(state.feePayerBranchCode == state.debtorAgentBranchCode) {
+            "Fee: feePayerBranchCode must equal debtorAgentBranchCode (debtor bank pays for EFT credits)"
         }
     }
 
@@ -282,6 +284,13 @@ class PaymentInstructionContract : Contract {
      * ChatGPT correctly identified that the original code only enforced this for
      * UpdateStatus but not for Cancel/Resolve/Return — a serious contract integrity flaw.
      */
+    private fun verifySettle(transaction: UtxoLedgerTransaction) {
+        val inputs = transaction.getInputStates(PaymentInstructionState::class.java)
+        require(inputs.isNotEmpty()) { "Settle: must consume at least one state" }
+        val outputs = transaction.getOutputStates(PaymentInstructionState::class.java)
+        require(outputs.isEmpty()) { "Settle: must not produce any output states" }
+    }
+
     private fun verifyImmutableFieldsUnchanged(
         input: PaymentInstructionState,
         output: PaymentInstructionState,
