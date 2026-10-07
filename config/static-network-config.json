@@ -1,6 +1,6 @@
 [
-  {"x500Name":"CN=BankAlpha, OU=PayFi, O=BankAlpha, L=Johannesburg, C=ZA", "cpi":"MyCorDapp"},
-  {"x500Name":"CN=BankBeta, OU=PayFi, O=BankBeta, L=Cape Town, C=ZA", "cpi":"MyCorDapp"},
-  {"x500Name":"CN=SARBObserver, OU=PayFi, O=SARB, L=Pretoria, C=ZA", "cpi":"MyCorDapp"},
+  {"x500Name":"CN=BankAlpha, OU=PayFi, O=BankAlpha, L=Johannesburg, C=ZA", "cpi":"PayFiClearing"},
+  {"x500Name":"CN=BankBeta, OU=PayFi, O=BankBeta, L=Cape Town, C=ZA", "cpi":"PayFiClearing"},
+  {"x500Name":"CN=SARBObserver, OU=PayFi, O=SARB, L=Pretoria, C=ZA", "cpi":"PayFiClearing"},
   {"x500Name":"CN=NotaryRep1, OU=PayFi, O=R3, L=London, C=GB", "cpi":"NotaryServer", "serviceX500Name":"CN=NotaryService, OU=PayFi, O=R3, L=London, C=GB"}
 ]

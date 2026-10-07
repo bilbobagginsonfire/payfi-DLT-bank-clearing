@@ -43,7 +43,7 @@ subprojects {
 cordaRuntimeGradlePlugin {
     notaryVersion = cordaNotaryPluginsVersion
     notaryCpiName = "NotaryServer"
-    corDappCpiName = "MyCorDapp"
+    corDappCpiName = "PayFiClearing"
     cpiUploadTimeout = "120000"
     vnodeRegistrationTimeout = "60000"
     cordaProcessorTimeout = "300000"

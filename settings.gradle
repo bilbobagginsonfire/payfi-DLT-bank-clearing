@@ -14,6 +14,6 @@ pluginManagement {
         id 'net.corda.gradle.plugin' version cordaGradlePluginVersion
     }
 }
-rootProject.name = 'cordapp-template-kotlin'
+rootProject.name = 'payfi-dlt-bank-clearing'
 include ':workflows'
 include ':contracts'

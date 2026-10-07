@@ -3,7 +3,7 @@
 ## Document Version: 4.0
 ## Date: 31 March 2026
 ## Platform: PayFi Interbank ZAR Clearing (ISO 20022) on Corda 5.2
-## GitHub: bilbobagginsonfire/payfi-prototype (branch: main)
+## GitHub: [bilbobagginsonfire/payfi-DLT-bank-clearing](https://github.com/bilbobagginsonfire/payfi-DLT-bank-clearing) (branch: main)
 
 ---
 
@@ -180,7 +180,7 @@ unzip -p workflows/build/libs/workflows-1.0-SNAPSHOT.jar META-INF/MANIFEST.MF | 
 cordaRuntimeGradlePlugin {
     notaryVersion = cordaNotaryPluginsVersion
     notaryCpiName = "NotaryServer"
-    corDappCpiName = "MyCorDapp"
+    corDappCpiName = "PayFiClearing"
     cpiUploadTimeout = "120000"            // 120 seconds — default 30000 causes timeouts
     vnodeRegistrationTimeout = "60000"
     cordaProcessorTimeout = "300000"
@@ -247,9 +247,9 @@ The compose file should have exactly 4 services: `postgresql`, `kafka`, `kafka-c
 File: `config/static-network-config.json`
 ```json
 [
-  {"x500Name":"CN=BankAlpha, OU=PayFi, O=BankAlpha, L=Johannesburg, C=ZA", "cpi":"MyCorDapp"},
-  {"x500Name":"CN=BankBeta, OU=PayFi, O=BankBeta, L=Cape Town, C=ZA", "cpi":"MyCorDapp"},
-  {"x500Name":"CN=SARBObserver, OU=PayFi, O=SARB, L=Pretoria, C=ZA", "cpi":"MyCorDapp"},
+  {"x500Name":"CN=BankAlpha, OU=PayFi, O=BankAlpha, L=Johannesburg, C=ZA", "cpi":"PayFiClearing"},
+  {"x500Name":"CN=BankBeta, OU=PayFi, O=BankBeta, L=Cape Town, C=ZA", "cpi":"PayFiClearing"},
+  {"x500Name":"CN=SARBObserver, OU=PayFi, O=SARB, L=Pretoria, C=ZA", "cpi":"PayFiClearing"},
   {"x500Name":"CN=NotaryRep1, OU=PayFi, O=R3, L=London, C=GB", "cpi":"NotaryServer", "serviceX500Name":"CN=NotaryService, OU=PayFi, O=R3, L=London, C=GB"}
 ]
 ```
