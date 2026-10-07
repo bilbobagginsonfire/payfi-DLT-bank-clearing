@@ -1,0 +1,29 @@
+# Gradle
+build/
+.gradle/
+local.properties
+
+# Kotlin
+*.class
+.kotlin/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+out/
+
+# Corda CSDE runtime plugin
+workspace/
+logs/
+*.log
+*.pfx
+
+# Root manifest emitted by tooling
+/META-INF/
+
+# Frontend runtime config (copy frontend/config.example.js)
+frontend/config.js
+
+# OS
+.DS_Store
+Thumbs.db
