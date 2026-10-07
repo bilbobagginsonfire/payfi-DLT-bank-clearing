@@ -320,9 +320,11 @@ body{font-family:var(--sans);background:var(--bg);color:var(--t1);height:100vh;o
   </div>
 </div>
 
+<script src="config.js"></script>
 <script>
 // ============================================================================
 // CONFIG
+// Deployment settings come from config.js (copy config.example.js; gitignored).
 // ============================================================================
 const BANKS={
   blue:{name:'Bank Blue',branch:'100001',hash:'166B20F5ED8A',color:'var(--blue)'},
@@ -330,13 +332,14 @@ const BANKS={
 };
 const BRANCH_TO_NAME={'100001':'Bank Blue','200002':'Bank Turquoise'};
 const BRANCH_TO_KEY={'100001':'blue','200002':'turq'};
-const C={apiBase:'/api/v5_2',sarbHash:'5C84CA45C720'};
+const CFG=window.PAYFI_CONFIG;
+const C={apiBase:CFG&&CFG.apiBase,sarbHash:'5C84CA45C720'};
 const QUERY_FLOW='za.co.payfi.clearing.flows.QueryPaymentInstructionsFlow';
 const SARB_QUERY_FLOW='za.co.payfi.clearing.flows.QuerySarbTransactionsFlow';
 const SETTLE_FLOW='za.co.payfi.clearing.flows.SettleTransactionsFlow';
 const SARB_SETTLE_FLOW='za.co.payfi.clearing.flows.MarkSarbSettledFlow';
 const SUBMIT_FLOW='za.co.payfi.clearing.flows.SubmitPaymentInstructionFlow';
-const AUTH='Basic '+btoa('admin:admin');
+const AUTH_HEADERS=CFG&&CFG.username?{'Authorization':'Basic '+btoa(CFG.username+':'+(CFG.password||''))}:{};
 
 let liveMode=true, pollLock=false, pollTimer=null;
 let vnodeData={blue:[],turq:[],sarb:[]};
@@ -506,7 +509,7 @@ async function loadConfig(){
   $('hB').textContent=BANKS.turq.hash;
   $('hS').textContent=C.sarbHash;
   try{
-    const r=await fetch(C.apiBase+'/flow/'+BANKS.blue.hash,{method:'GET',headers:{'Authorization':AUTH},signal:AbortSignal.timeout(5000)});
+    const r=await fetch(C.apiBase+'/flow/'+BANKS.blue.hash,{method:'GET',headers:AUTH_HEADERS,signal:AbortSignal.timeout(5000)});
     if(r.ok||r.status===400||r.status===404){
       liveMode=true;setModeUI(true);
       await refreshAll();
@@ -569,11 +572,11 @@ async function netSettle(){
 // LOW-LEVEL API
 // ============================================================================
 async function apiPost(url,body){
-  const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','Authorization':AUTH},body:JSON.stringify(body)});
+  const r=await fetch(url,{method:'POST',headers:Object.assign({'Content-Type':'application/json'},AUTH_HEADERS),body:JSON.stringify(body)});
   return r.json();
 }
 async function apiGet(url){
-  const r=await fetch(url,{headers:{'Authorization':AUTH}});
+  const r=await fetch(url,{headers:AUTH_HEADERS});
   if(!r.ok) return null;
   return r.json();
 }
@@ -881,7 +884,16 @@ function renderS(){
   }).join('');
 }
 
-loadConfig();
+function showConfigError(){
+  var msg='Frontend configuration missing: frontend/config.js was not found or has no apiBase. '+
+    'Copy frontend/config.example.js to frontend/config.js and set apiBase (and credentials if your proxy does not inject them).';
+  console.error(msg);
+  document.body.innerHTML='<div style="max-width:640px;margin:15vh auto;padding:24px;font-family:system-ui,sans-serif;'+
+    'border:1px solid #c0392b;border-radius:8px;background:#fff;color:#222"><h2 style="margin-top:0;color:#c0392b">Configuration required</h2>'+
+    '<p>'+msg+'</p><pre style="background:#f4f4f4;padding:12px;border-radius:4px">cp frontend/config.example.js frontend/config.js</pre></div>';
+}
+
+if(!CFG||!CFG.apiBase) showConfigError(); else loadConfig();
 </script>
 </body>
 </html>

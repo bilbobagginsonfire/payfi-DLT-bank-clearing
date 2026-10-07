@@ -88,7 +88,7 @@ The CorDapp processes ISO 20022 pacs.008 payment instructions, validates them ag
 ## Server
 - **Provider:** <HOSTING_PROVIDER>
 - **OS:** Ubuntu 24
-- **IP:** <SERVER_IP> (IPv4), <SERVER_IPV6> (IPv6)
+- **IP:** `<SERVER_IP>` (IPv4), `<SERVER_IPV6>` (IPv6)
 - **k3s/Traefik:** Running on the server, intercepts ports 80/443 via iptables DNAT
 
 ## Software Versions
@@ -849,6 +849,8 @@ server {
 }
 ```
 
+`<BASE64_CREDENTIALS>` is `base64("<user>:<password>")` for a dedicated, least-privilege Corda REST user. Never commit the real value, and do not expose the proxy publicly without additional authentication in front of it: anyone who can reach `/api/` acts as that user.
+
 ## Firewall
 Port 8080 must be opened:
 ```bash
@@ -857,13 +859,22 @@ iptables -I INPUT -p tcp --dport 8080 -j ACCEPT
 ```
 
 ## URLs
-- Frontend: http://<SERVER_IP>:8080/
-- API proxy: http://<SERVER_IP>:8080/api/
+- Frontend: `http://<SERVER_IP>:8080/`
+- API proxy: `http://<SERVER_IP>:8080/api/`
 
 ## Nginx Heredoc Warning
 When using `cat > ... << EOF` with nginx configs, use `<< 'EOF'` (single-quoted) to prevent shell variable expansion of `$uri`, `$host`, etc. Without quotes, these are interpreted as shell variables and become empty strings.
 
 ## Frontend JavaScript Configuration (v3.0)
+
+### API base URL and credentials (config.js)
+The API base URL and optional REST credentials are no longer hard-coded in `index.html`. They are read from `frontend/config.js`, which is gitignored:
+
+```bash
+cp frontend/config.example.js frontend/config.js   # then edit apiBase / username / password
+```
+
+Deploy `config.js` next to `index.html` (e.g. `/var/www/payfi/config.js`). Leave `username`/`password` empty when nginx injects the `Authorization` header. If `config.js` is missing, the frontend shows a "Configuration required" message instead of starting.
 
 ### Vnode Hashes
 The frontend `index.html` has hardcoded vnode hashes that must be updated after every `stopCordaAndCleanWorkspace` + `vNodesSetup` cycle:
