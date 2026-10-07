@@ -9,6 +9,9 @@
 
 ## Changelog
 
+**v4.1 (October 2026)** — Luhn fix:
+- **Section 10/11:** `SouthAfricanIdentityValidator` now applies standard Luhn over all 13 digits. Previous demo and test IDs only passed the old, incorrect check and were replaced with synthetic IDs from `specs/generate_sa_ids.py`
+
 **v4.0 (31 March 2026)** — Settlement, SARB backend, createdAt timestamp, full frontend integration:
 - **Section 6:** Added `createdAt: Instant` field to `PaymentInstructionState` and `PaymentInstructionDto`; added `SarbTransactionRecord` JPA entity with `settled` flag
 - **Section 8:** Added `sarb_transaction_records` table with `settled` column to SQL creation scripts
@@ -27,7 +30,7 @@
 - **Section 8:** Improved automated grant script using `pg_user` lookup (eliminates manual username discovery)
 - **Section 9:** Added `deployCpis` limitation — does NOT update existing vnodes for ANY code changes (always requires full cycle)
 - **Section 10:** Added frontend field mapping fixes (`mapApiState` DTO field names), query flow class name fix
-- **Section 11:** Confirmed test-033 end-to-end with correct SA ID `8501015800089`; documented SARB vault query returns empty
+- **Section 11:** Confirmed test-033 end-to-end with a Luhn-valid SA ID (superseded in v4.1: now `8506150123089`); documented SARB vault query returns empty
 - **Section 12:** Added Issues 13–16 (QueryPaymentInstructionsFlow serialization, SARB vault empty, connection pool exhaustion from polling, deployCpis vnode binding)
 - **Section 14 (NEW):** SARB Observer Vault — architectural finding and resolution options
 - **Appendix A:** Added `PaymentInstructionDto` to file layout
@@ -37,7 +40,7 @@
 - **Section 6:** Added critical warning about duplicate Entities.kt across modules
 - **Section 8:** Updated DB connection user from `postgres` to `user`, added mandatory Step 3 (GRANT permissions to vnode DML/DDL users), added automated grant script
 - **Section 9:** Updated full deploy workflow with grants step, added `cordapp-configuration` to prerequisites checklist
-- **Section 11:** Fixed test SA ID number (8501015800086 fails Luhn; 8501015800089 is valid)
+- **Section 11:** Fixed test SA ID number (superseded in v4.1, see Section 11)
 - **Section 12:** Added Issues 7–12 (cordapp-configuration, duplicate entities, CPB2 plugin, PEM files, compose FlowManagementUI, table permissions)
 - **Section 13:** Updated quick reference commands with correct DB user and grant commands
 - **Appendix A:** Updated file layout to include config PEM files and compose
@@ -935,7 +938,7 @@ pacs002Code:s.pacs002Code||s.txStatus||(s.status==='SUBMITTED'?'ACCP':...)
 
 **Payment Reference:** Renamed from "Remittance" to "Payment Reference" in the detail view.
 
-**Demo SA IDs:** Blue demo `7801015012082` (Luhn valid). Turquoise demo corrected from `8505025098087` to `8505025098085` (Luhn valid).
+**Demo SA IDs:** Blue demo `9001015009086`, Turquoise demo `8506150123089` (both standard-Luhn valid, synthetic; see `specs/verified-sa-ids.txt`).
 
 **Fee timeline:** Fee line shows "Fee calculated" without amount detail (fee amounts visible in the detail panel, per creditor-bank-pays architecture).
 
@@ -959,11 +962,13 @@ The button calls `SettleTransactionsFlow` on BankAlpha (consumes UTXO states), t
 # 11. Testing
 
 ## Test SA ID Numbers
-The SA ID `8501015800086` **FAILS** the Luhn check. The correct check digit for `850101580008` is `9`.
+The SA ID `8506150123085` **FAILS** the Luhn check. The correct check digit for `850615012308` is `9`.
 
-**Valid test ID: `8501015800089`** — passes Luhn validation, format YYMMDD GSSS CAZ.
+**Valid test ID: `8506150123089`** — passes Luhn validation, format YYMMDD SSSS C A Z.
 
-All SA ID examples used in test fixtures must be computationally verified using the Luhn algorithm before use.
+All SA ID examples used in test fixtures must be computationally verified using the standard Luhn algorithm (all 13 digits, sum mod 10 == 0) before use. Regenerate synthetic IDs with `python specs/generate_sa_ids.py`.
+
+> **Note (v4.1):** Versions up to v4.0 of the validator doubled the wrong digits, so earlier demo IDs (`7801015012082`, `8501015800089`, `8505025098085`, …) were accepted incorrectly. They are rejected by the corrected validator and have been replaced.
 
 ## Test Payment (Rejected — No Debtor ID)
 ```bash
@@ -976,12 +981,12 @@ curl -sk -u admin:admin -X POST "https://localhost:8888/api/v5_2/flow/$ALPHA_HAS
 Expected: `RJCT` with `CH09: debtorIdNumber must not be blank`
 
 ## Test Payment (Rejected — Invalid Luhn)
-Add `<Id><PrvtId><Othr><Id>8501015800086</Id><SchmeNm><Cd>NIDN</Cd></SchmeNm></Othr></PrvtId></Id>` inside `<Dbtr>` after `<Nm>`.
+Add `<Id><PrvtId><Othr><Id>8506150123085</Id><SchmeNm><Cd>NIDN</Cd></SchmeNm></Othr></PrvtId></Id>` inside `<Dbtr>` after `<Nm>`.
 
 Expected: `RJCT` with `BE01: invalid SA ID number (Luhn check failed)`
 
 ## Test Payment (Accepted — Valid SA ID)
-Use `8501015800089` as the debtor ID (passes Luhn check).
+Use `8506150123089` as the debtor ID (passes Luhn check).
 
 Expected: `ACCP` — full end-to-end flow: parsed, validated, ledger-recorded across BankAlpha + BankBeta + SARB observer, notarised, pacs.002 success response.
 

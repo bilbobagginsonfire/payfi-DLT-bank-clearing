@@ -10,14 +10,15 @@ object SouthAfricanIdentityValidator {
      * Validates a South African ID number.
      * Format: YYMMDD GSSS CAZ (13 digits)
      *
-     * Luhn algorithm:
-     * 1. Take first 12 digits
-     * 2. From rightmost of those 12, double every second digit
+     * Luhn algorithm over all 13 digits:
+     * 1. Number positions from the rightmost digit (check digit Z = position 0)
+     * 2. Double every digit at an odd position
      * 3. If doubled > 9, subtract 9
      * 4. Sum all processed digits
-     * 5. Check digit = (10 - (sum mod 10)) mod 10
+     * 5. Valid when sum mod 10 == 0
      *
-     * Verified valid IDs: 7801015012082, 8501015800089, 9005152345081, 7508205120084
+     * Synthetic valid IDs (see specs/verified-sa-ids.txt):
+     * 9001015009086, 8506150123089, 7703125432080, 9502280456183
      */
     fun isValidSaId(idNumber: String): Boolean {
         if (idNumber.length != 13 || !idNumber.all { it.isDigit() }) return false
@@ -28,25 +29,16 @@ object SouthAfricanIdentityValidator {
     }
 
     private fun isValidLuhn(idNumber: String): Boolean {
-        val digits = idNumber.map { it.digitToInt() }
-        val first12 = digits.subList(0, 12)
-        val actualCheckDigit = digits[12]
-
-        val processed = mutableListOf<Int>()
-        for (i in first12.indices.reversed()) {
-            val positionFromRight = first12.size - 1 - i
-            if (positionFromRight % 2 == 1) {
-                var doubled = first12[i] * 2
-                if (doubled > 9) doubled -= 9
-                processed.add(doubled)
+        val sum = idNumber.reversed().mapIndexed { position, char ->
+            val digit = char.digitToInt()
+            if (position % 2 == 1) {
+                val doubled = digit * 2
+                if (doubled > 9) doubled - 9 else doubled
             } else {
-                processed.add(first12[i])
+                digit
             }
-        }
-
-        val total = processed.sum()
-        val calculatedCheckDigit = (10 - (total % 10)) % 10
-        return calculatedCheckDigit == actualCheckDigit
+        }.sum()
+        return sum % 10 == 0
     }
 
     private fun isValidDateOfBirth(yymmdd: String): Boolean {
