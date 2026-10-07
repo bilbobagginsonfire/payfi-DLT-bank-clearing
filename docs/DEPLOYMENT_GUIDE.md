@@ -1436,7 +1436,7 @@ Every transaction submitted to the network, with full FICA-compliant data: debto
 # Appendix A: File Layout
 
 ```
-payfi-cordapp/
+payfi-DLT-bank-clearing/
 ├── config/
 │   ├── static-network-config.json
 │   ├── combined-worker-compose.yaml       # From R3 template (flow-management-tool removed)
@@ -1470,12 +1470,20 @@ payfi-cordapp/
 │   └── (NO persistence/Entities.kt here — must not exist in workflows)
 ├── frontend/
 │   ├── index.html
-│   └── payfi-white-transparent.png
+│   ├── config.example.js                     # Copy to config.js (gitignored): apiBase + credentials
+│   └── *.png                                 # Logos
+├── specs/
+│   ├── generate_sa_ids.py                    # Synthetic Luhn-valid SA IDs for fixtures
+│   └── verified-sa-ids.txt
 ├── gradle.properties                         # Must have platformVersion=50200
 ├── settings.gradle
 ├── build.gradle                              # cordapp-configuration APPLIED (not apply false)
+├── README.md
+├── LICENSE                                   # Apache-2.0
+├── SECURITY.md
 └── docs/
-    └── PayFi_Corda52_Complete_Reference.md
+    ├── DEPLOYMENT_GUIDE.md
+    └── images/frontend.png
 ```
 
 ---
